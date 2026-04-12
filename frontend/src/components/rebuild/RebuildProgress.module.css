@@ -1,0 +1,31 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 200px;
+}
+
+.track {
+  height: 3px;
+  background: var(--surface2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+@keyframes progress-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.fill {
+  height: 100%;
+  background: var(--accent-light);
+  border-radius: 2px;
+  transition: width 0.4s ease;
+  animation: progress-glow 1.5s ease-in-out infinite;
+}
+
+.label {
+  font-size: 11px;
+  color: var(--text-muted);
+}

@@ -1,0 +1,12 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.centered {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

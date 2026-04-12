@@ -54,7 +54,7 @@ class ImpactItem(BaseModel):
 
     entity_id: Optional[str] = None
     reason: str = ""
-    evidence: List[Any] = []
+    evidence: Any = []
     distance: Optional[int] = None
     direction: Optional[str] = None
 

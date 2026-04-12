@@ -1,0 +1,76 @@
+.list { display: flex; flex-direction: column; gap: 4px; }
+
+.item { transition: opacity 0.2s; }
+.dimmed { opacity: 0.25; }
+
+.trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 9px 12px;
+  text-align: left;
+  color: var(--text);
+  transition: border-color 0.15s, background 0.15s;
+}
+.trigger:hover { border-color: #4b5563; background: var(--surface2); }
+.open { border-color: var(--accent) !important; background: rgba(124,58,237,0.06) !important; }
+
+.chevron { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+.name { flex: 1; font-size: 13px; font-weight: 500; }
+
+.crit {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+.high { background: rgba(248,81,73,0.15); color: var(--error); }
+.medium { background: rgba(210,153,34,0.15); color: var(--warning); }
+.low { background: rgba(63,185,80,0.15); color: var(--ok); }
+
+.actor { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+
+.detail {
+  padding: 10px 12px 12px 28px;
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: var(--surface2);
+  margin-top: -4px;
+}
+
+.steps { display: flex; flex-direction: column; gap: 6px; }
+
+.step {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.stepNum {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  background: var(--surface);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--accent-light);
+  font-weight: 600;
+}
+
+.impact {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--warning);
+}
