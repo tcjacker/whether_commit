@@ -1,0 +1,24 @@
+# MCP config contains secrets — do not commit
+.mcp.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+dist/
+*.egg-info/
+
+# Environment
+.env
+.env.*
+backend/.env.reasoning.local
+
+# Data snapshots (local only)
+data/
+
+# IDE
+.idea/
+.vscode/

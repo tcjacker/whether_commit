@@ -215,7 +215,7 @@ class JobManagerTest(unittest.IsolatedAsyncioTestCase):
             def __init__(self, workspace_path):
                 self.workspace_path = workspace_path
 
-            def aggregate_verification(self, change_data):
+            def aggregate_verification(self, change_data, graph_data=None):
                 return verification_payload
 
         with patch.object(manager.workspace_snapshot_service, "capture", return_value=pending_snapshot), patch(
