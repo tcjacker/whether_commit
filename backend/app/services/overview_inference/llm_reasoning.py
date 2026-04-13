@@ -256,6 +256,8 @@ class LLMReasoningService:
         reasoning["unknowns"] = self._filtered_text_list(parsed.get("unknowns", [])) or fallback["unknowns"]
         reasoning["validation_gaps"] = self._filtered_text_list(parsed.get("validation_gaps", [])) or fallback["validation_gaps"]
         reasoning["evidence_used"] = self._filtered_text_list(parsed.get("evidence_used", []))
+        if parsed.get("change_intent"):
+            reasoning["change_intent"] = self._coerce_text(parsed["change_intent"])
         reasoning["llm_reasoning"] = {
             "status": "accepted",
             "validation_issues": [],

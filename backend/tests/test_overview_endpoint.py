@@ -51,6 +51,7 @@ def _install_fastapi_stub():
         fastapi_module.FastAPI = _DummyFastAPI
         fastapi_module.HTTPException = _DummyHTTPException
         fastapi_module.BackgroundTasks = object
+        fastapi_module.Query = lambda *args, **kwargs: None
         sys.modules["fastapi"] = fastapi_module
 
         middleware_module = types.ModuleType("fastapi.middleware")

@@ -36,7 +36,12 @@ export function CapabilityMapCard({ capabilities, loading, highlightedKeys, sele
                 onClick={() => onSelect(isSelected ? null : cap.capability_key)}
               >
                 <div className={styles.row}>
-                  <span className={styles.name}>{cap.name}</span>
+                  <div className={styles.nameGroup}>
+                    <span className={styles.name}>{cap.name}</span>
+                    {cap.is_primary_target && (
+                      <span className={styles.primaryTag}>primary target</span>
+                    )}
+                  </div>
                   <StatusBadge status={cap.status} />
                 </div>
                 <div className={styles.meta}>

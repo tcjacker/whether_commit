@@ -43,6 +43,7 @@ export interface CapabilityItem {
   status: string // 'recently_changed' | 'stable' | 'needs_review' | 'unknown'
   linked_modules: string[]
   linked_routes: string[]
+  is_primary_target?: boolean
   reasoning_basis?: Record<string, unknown>
 }
 
@@ -107,6 +108,9 @@ export interface RecentAIChange {
   linked_tests: string[]
   verification_coverage: string
   confidence: string
+  change_intent: string
+  coherence: string
+  coherence_groups: string[]
 }
 
 // ─── Verification ─────────────────────────────────────────────────────────────

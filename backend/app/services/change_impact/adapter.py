@@ -464,6 +464,20 @@ class ChangeImpactAdapter:
         except Exception as e:
             raise RuntimeError(f"Failed to analyze git changes: {str(e)}")
 
+    def _compute_coherence(self, directly_changed_modules: List[str]) -> Dict[str, Any]:
+        """
+        Groups directly changed modules by their second-level path segment.
+        focused = <= 2 distinct groups; mixed = 3 or more.
+        """
+        groups: Set[str] = set()
+        for mod_key in directly_changed_modules:
+            parts = mod_key.removeprefix("mod_").split("__")
+            group = parts[1] if len(parts) > 1 else parts[0]
+            groups.add(group)
+        coherence_groups = sorted(groups)
+        coherence = "focused" if len(groups) <= 2 else "mixed"
+        return {"coherence": coherence, "coherence_groups": coherence_groups}
+
     def generate_change_analysis(self, workspace_snapshot_id: str) -> Dict[str, Any]:
         """
         Main entry point for JobManager to build the change impact analysis.
@@ -471,6 +485,9 @@ class ChangeImpactAdapter:
         try:
             raw_data = self._execute_code_review_graph()
             raw_data["workspace_snapshot_id"] = workspace_snapshot_id
+            raw_data["workspace_path"] = self.workspace_path
+            coherence_data = self._compute_coherence(raw_data.get("directly_changed_modules", []))
+            raw_data.update(coherence_data)
             return raw_data
         except Exception as e:
             raise RuntimeError(f"Failed to generate change impact analysis: {str(e)}")

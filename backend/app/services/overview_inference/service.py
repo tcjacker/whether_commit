@@ -129,6 +129,9 @@ class OverviewInferenceService:
                     "linked_tests": change_data.get("linked_tests", []),
                     "verification_coverage": "covered" if verification_data.get("affected_tests") else "missing",
                     "confidence": agent_reasoning.get("confidence", change_data.get("confidence", "medium")),
+                    "change_intent": agent_reasoning.get("change_intent", change_data.get("change_intent", "")),
+                    "coherence": change_data.get("coherence", "unknown"),
+                    "coherence_groups": change_data.get("coherence_groups", []),
                 }
             )
 

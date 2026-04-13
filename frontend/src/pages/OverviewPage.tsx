@@ -137,6 +137,7 @@ export function OverviewPage() {
           highlightedIds={highlightedChangeIds}
           selectedId={selectedChangeId}
           onSelect={selectChange}
+          repoKey={repoKey}
         />
 
         {/* 5 — Architecture (spans full row via CSS) */}
@@ -152,6 +153,8 @@ export function OverviewPage() {
           loading={isLoading || isRebuilding}
           selectedModule={selectedVerificationModule}
           onSelectModule={selectVerificationModule}
+          repoKey={repoKey}
+          workspacePath={workspacePath}
         />
       </DashboardGrid>
     </div>

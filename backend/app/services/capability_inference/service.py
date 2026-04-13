@@ -13,7 +13,7 @@ class CapabilityInferenceService:
         agent_reasoning: Dict[str, Any],
     ) -> List[Dict[str, Any]]:
         routes = list(graph_data.get("routes", []))
-        modules = {module["module_id"]: module for module in graph_data.get("modules", []) if module.get("module_id")}
+        modules = {m["module_id"]: m for m in graph_data.get("modules", []) if m.get("module_id")}
         if not routes:
             return []
 
@@ -43,38 +43,55 @@ class CapabilityInferenceService:
                     if route.get("path")
                 }
             )
+
+            # Modules that own routes in this group (narrow — used for attribution)
+            route_linked_modules = {
+                route["module"]
+                for route in grouped_routes
+                if route.get("module") in modules
+                and modules[route["module"]].get("type") in {"router", "service"}
+            }
+
+            # Full display set: route-owning modules + transitive service modules
             linked_modules = sorted(
-                {
-                    route["module"]
-                    for route in grouped_routes
-                    if route.get("module") in modules
-                    and modules[route["module"]].get("type") in {"router", "service"}
-                }
-                | direct_modules
-                | {module_id for module_id in transitive_modules if module_id in modules and modules[module_id].get("type") == "service"}
+                route_linked_modules
+                | {m for m in transitive_modules if m in modules and modules[m].get("type") == "service"}
             )
+
             if not linked_routes or not linked_modules:
                 continue
+
+            # Precise attribution: only this capability's route-owning modules matter
+            overlap = route_linked_modules & direct_modules
+            is_recently_changed = bool(overlap)
+            overlap_count = len(overlap)
 
             capabilities.append(
                 {
                     "capability_key": f"cap_{group_key}",
                     "name": self._display_name(group_key),
-                    "status": "recently_changed" if direct_modules or transitive_modules else "stable",
+                    "status": "recently_changed" if is_recently_changed else "stable",
                     "linked_modules": linked_modules,
                     "linked_routes": linked_routes,
                     "reasoning_basis": {
                         "route_group": group_key,
                         "llm_reasoning_status": reasoning_status or "disabled",
-                        "unverified_modules": sorted(module_id for module_id in linked_modules if module_id in unverified_impacts),
+                        "unverified_modules": sorted(m for m in linked_modules if m in unverified_impacts),
                     },
+                    "_overlap_count": overlap_count,
                 }
             )
+
+        # Mark primary target: capability with highest overlap with directly changed modules
+        max_overlap = max((c["_overlap_count"] for c in capabilities), default=0)
+        for cap in capabilities:
+            cap["is_primary_target"] = max_overlap > 0 and cap["_overlap_count"] == max_overlap
+            del cap["_overlap_count"]
 
         return capabilities
 
     def _route_group_key(self, path: str) -> str:
-        parts = [part for part in path.strip("/").split("/") if part and not part.startswith("{")]
+        parts = [p for p in path.strip("/").split("/") if p and not p.startswith("{")]
         return parts[0].replace("-", "_") if parts else "root"
 
     def _display_name(self, group_key: str) -> str:

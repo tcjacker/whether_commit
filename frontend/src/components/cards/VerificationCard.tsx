@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { VerificationStatus } from '../../types/api'
 import { CardShell } from '../shared/CardShell'
 import { SkeletonBlock } from '../shared/SkeletonBlock'
@@ -9,6 +10,8 @@ interface Props {
   loading: boolean
   selectedModule: string | null
   onSelectModule: (mod: string | null) => void
+  repoKey: string
+  workspacePath?: string
 }
 
 function row(label: string, data: { status: string; passed?: number; total?: number }) {
@@ -19,7 +22,43 @@ function row(label: string, data: { status: string; passed?: number; total?: num
   return { label, status: data.status, detail }
 }
 
-export function VerificationCard({ status, loading, selectedModule, onSelectModule }: Props) {
+interface RunResult {
+  status: string
+  passed: number
+  total: number
+  duration_ms: number
+  detail: string
+}
+
+export function VerificationCard({ status, loading, selectedModule, onSelectModule, repoKey, workspacePath }: Props) {
+  const [running, setRunning] = useState(false)
+  const [runResult, setRunResult] = useState<RunResult | null>(null)
+  const [runError, setRunError] = useState<string | null>(null)
+
+  const handleRunTests = async () => {
+    if (!workspacePath) return
+    setRunning(true)
+    setRunResult(null)
+    setRunError(null)
+    try {
+      const resp = await fetch('/api/verification/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repo_key: repoKey, workspace_path: workspacePath }),
+      })
+      const data = await resp.json()
+      if (!resp.ok) {
+        setRunError(data.detail ?? 'Unknown error')
+      } else {
+        setRunResult(data)
+      }
+    } catch (e) {
+      setRunError(String(e))
+    } finally {
+      setRunning(false)
+    }
+  }
+
   if (loading || !status) {
     return (
       <CardShell title="Verification Status">
@@ -88,6 +127,36 @@ export function VerificationCard({ status, loading, selectedModule, onSelectModu
                 <li key={i} className={styles.area}>⚠ {a}</li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {workspacePath && (
+          <div className={styles.runSection}>
+            <button
+              className={styles.runBtn}
+              onClick={handleRunTests}
+              disabled={running}
+            >
+              {running ? 'Running…' : 'Run Tests'}
+            </button>
+
+            {runResult && (
+              <div className={`${styles.runResult} ${runResult.status === 'passed' ? styles.runPassed : styles.runFailed}`}>
+                <span className={styles.runStatus}>
+                  {runResult.status === 'passed' ? '✓' : '✗'} {runResult.passed}/{runResult.total} passed
+                </span>
+                <span className={styles.runDuration}>
+                  {(runResult.duration_ms / 1000).toFixed(1)}s
+                </span>
+                {runResult.detail && (
+                  <span className={styles.runDetail}>{runResult.detail}</span>
+                )}
+              </div>
+            )}
+
+            {runError && (
+              <div className={styles.runError}>{runError}</div>
+            )}
           </div>
         )}
       </div>

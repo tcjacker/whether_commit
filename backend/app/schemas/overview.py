@@ -82,6 +82,9 @@ class RecentAIChange(BaseModel):
     linked_tests: List[str] = []
     verification_coverage: str = "unknown"
     confidence: str = "low"
+    change_intent: str = ""
+    coherence: str = "unknown"
+    coherence_groups: List[str] = []
 
 class VerificationStatus(BaseModel):
     build: Dict[str, Any] = {"status": "unknown"}
@@ -112,6 +115,17 @@ class OverviewResponse(BaseModel):
     recent_ai_changes: List[RecentAIChange] = []
     verification_status: VerificationStatus = VerificationStatus()
     warnings: List[str] = []
+
+class RunVerificationRequest(BaseModel):
+    repo_key: str
+    workspace_path: str
+
+class RunVerificationResponse(BaseModel):
+    status: str
+    passed: int = 0
+    total: int = 0
+    duration_ms: int = 0
+    detail: str = ""
 
 class RebuildRequest(BaseModel):
     repo_key: str

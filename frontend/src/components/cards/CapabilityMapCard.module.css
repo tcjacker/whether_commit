@@ -28,3 +28,22 @@
   color: var(--text-muted);
   font-family: ui-monospace, monospace;
 }
+
+.nameGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.primaryTag {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: rgba(167,139,250,0.18);
+  color: var(--accent-light);
+  flex-shrink: 0;
+}

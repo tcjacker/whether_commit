@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import type { RecentAIChange } from '../../types/api'
 import { CardShell } from '../shared/CardShell'
 import { SkeletonBlock } from '../shared/SkeletonBlock'
 import { RiskBar } from '../shared/RiskBar'
 import { EmptyState } from '../shared/EmptyState'
+import { DiffViewer } from '../diff/DiffViewer'
 import styles from './AIChangesCard.module.css'
 
 interface Props {
@@ -11,10 +13,12 @@ interface Props {
   highlightedIds: Set<string>
   selectedId: string | null
   onSelect: (id: string | null) => void
+  repoKey: string
 }
 
-export function AIChangesCard({ changes, loading, highlightedIds, selectedId, onSelect }: Props) {
+export function AIChangesCard({ changes, loading, highlightedIds, selectedId, onSelect, repoKey }: Props) {
   const hasHighlight = highlightedIds.size > 0
+  const [diffFile, setDiffFile] = useState<string | null>(null)
 
   return (
     <CardShell title="Recent AI Changes" subtitle={changes.length ? `${changes.length} change sets` : undefined}>
@@ -30,7 +34,6 @@ export function AIChangesCard({ changes, loading, highlightedIds, selectedId, on
             const isSelected = selectedId === c.change_id
             const dimmed = hasHighlight && !highlightedIds.has(c.change_id)
 
-            // Derive a 0–1 risk score from risk_factors count if no explicit score
             const riskScore = c.risk_factors.length > 0
               ? Math.min(1, c.risk_factors.length / 5)
               : 0.1
@@ -47,6 +50,12 @@ export function AIChangesCard({ changes, loading, highlightedIds, selectedId, on
                     {c.confidence}
                   </span>
                 </div>
+
+                {c.coherence === 'mixed' && c.coherence_groups && c.coherence_groups.length > 0 && (
+                  <div className={styles.coherenceWarning}>
+                    Mixed changes — touches {c.coherence_groups.length} unrelated areas: {c.coherence_groups.join(', ')}
+                  </div>
+                )}
 
                 {c.summary && <p className={styles.summary}>{c.summary}</p>}
 
@@ -65,14 +74,43 @@ export function AIChangesCard({ changes, loading, highlightedIds, selectedId, on
                   <RiskBar score={riskScore} />
                 </div>
 
-                {isSelected && c.risk_factors.length > 0 && (
+                {isSelected && (
                   <div className={styles.detail}>
-                    <p className={styles.detailLabel}>Risk factors</p>
-                    <ul className={styles.riskList}>
-                      {c.risk_factors.map((r, i) => (
-                        <li key={i}>⚠ {r}</li>
-                      ))}
-                    </ul>
+                    {c.change_intent && (
+                      <div className={styles.intentBox}>
+                        <span className={styles.intentLabel}>Intent</span>
+                        {c.change_intent}
+                      </div>
+                    )}
+
+                    {c.changed_files.length > 0 && (
+                      <>
+                        <p className={styles.detailLabel}>Changed files</p>
+                        <ul className={styles.fileList}>
+                          {c.changed_files.map((f, i) => (
+                            <li key={i}>
+                              <button
+                                className={styles.fileLink}
+                                onClick={e => { e.stopPropagation(); setDiffFile(f) }}
+                              >
+                                {f}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+
+                    {c.risk_factors.length > 0 && (
+                      <>
+                        <p className={styles.detailLabel} style={{ marginTop: 8 }}>Risk factors</p>
+                        <ul className={styles.riskList}>
+                          {c.risk_factors.map((r, i) => (
+                            <li key={i}>⚠ {r}</li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
                     {c.review_recommendations.length > 0 && (
                       <>
                         <p className={styles.detailLabel} style={{ marginTop: 8 }}>Recommendations</p>
@@ -89,6 +127,14 @@ export function AIChangesCard({ changes, loading, highlightedIds, selectedId, on
             )
           })}
         </ul>
+      )}
+
+      {diffFile && (
+        <DiffViewer
+          repoKey={repoKey}
+          filePath={diffFile}
+          onClose={() => setDiffFile(null)}
+        />
       )}
     </CardShell>
   )

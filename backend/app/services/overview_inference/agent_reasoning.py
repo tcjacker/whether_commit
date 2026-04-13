@@ -88,6 +88,8 @@ class AgentReasoningService:
             local_result["confidence"],
             reasoning.get("confidence", "low"),
         )
+        if reasoning.get("change_intent"):
+            local_result["change_intent"] = reasoning["change_intent"]
         local_result["llm_reasoning"]["status"] = "accepted"
         return local_result
 
@@ -156,6 +158,20 @@ class AgentReasoningService:
         if not affected_tests:
             unknowns.append("Verification evidence is weak or missing for the changed surface.")
 
+        # Infer a brief change_intent from available facts
+        intent_parts: List[str] = []
+        if changed_routes:
+            intent_parts.append(f"modifies {len(changed_routes)} API route(s)")
+        if change_data.get("changed_schemas"):
+            intent_parts.append("updates data contracts")
+        if change_data.get("changed_jobs"):
+            intent_parts.append("changes background jobs")
+        if changed_symbols:
+            intent_parts.append(f"touches {len(changed_symbols)} symbol(s)")
+        if not intent_parts:
+            intent_parts.append(f"modifies {len(changed_files)} file(s)")
+        change_intent = "Change " + "; ".join(intent_parts) + "."
+
         return {
             "technical_change_summary": (
                 f"{len(changed_files)} files changed; "
@@ -165,6 +181,7 @@ class AgentReasoningService:
             "risk_factors": risk_factors,
             "review_recommendations": list(change_data.get("minimal_review_set", [])),
             "why_impacted": " | ".join(why_impacted_parts),
+            "change_intent": change_intent,
             "confidence": confidence,
             "unknowns": unknowns,
             "validation_gaps": missing_tests or (["No report-backed test evidence for the changed files."] if not affected_tests else []),
