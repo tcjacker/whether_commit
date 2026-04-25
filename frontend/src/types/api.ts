@@ -14,6 +14,46 @@ export interface SnapshotInfo {
   generated_at: string
 }
 
+// ─── Agent Harness ─────────────────────────────────────────────────────────
+
+export type AgentHarnessStatus = 'accepted' | 'fallback' | 'timeout' | 'validation_failed' | 'budget_exceeded'
+
+export interface AgentHarnessProjectSummary {
+  overall_assessment?: string
+  impact_level?: 'high' | 'medium' | 'low' | 'unknown'
+  impact_basis?: Array<Record<string, unknown>>
+  affected_capability_count?: number
+  affected_entrypoints?: string[]
+  critical_paths?: string[]
+  verification_gaps?: string[]
+  priority_themes?: string[]
+}
+
+export interface AgentHarnessCapability {
+  capability_key: string
+  name: string
+  impact_status: 'unknown' | 'untouched' | 'directly_changed' | 'indirectly_impacted' | 'high_risk_unverified'
+  impact_reason: string
+  related_themes: string[]
+  verification_status: 'unknown' | 'verified' | 'unverified' | 'partial' | 'covered' | 'missing'
+}
+
+export interface AgentHarnessChangeTheme {
+  theme_key: string
+  name: string
+  summary: string
+  capability_keys: string[]
+  change_ids: string[]
+}
+
+export type AgentHarnessReadTargetType = 'file' | 'symbol' | 'call_chain' | 'verification_context'
+
+export interface AgentHarnessReadRequest {
+  target_type: AgentHarnessReadTargetType
+  target_id: string
+  reason: string
+}
+
 // ─── Project Summary ─────────────────────────────────────────────────────────
 
 export interface AgentReasoning {
@@ -28,11 +68,121 @@ export interface AgentReasoning {
   llm_reasoning: Record<string, unknown>
 }
 
-export interface ProjectSummary {
+export interface ProjectSummary extends AgentHarnessProjectSummary {
   what_this_app_seems_to_do: string
   technical_narrative: string
   core_flow: string
   agent_reasoning?: AgentReasoning
+}
+
+export interface ChangeRiskHeadline {
+  overall_risk_level: 'high' | 'medium' | 'low' | 'unknown'
+  overall_risk_summary: string
+  recommended_focus: string[]
+}
+
+export interface ChangeRiskCoverage {
+  coverage_status: 'well_covered' | 'partially_covered' | 'weakly_covered' | 'unknown'
+  affected_test_count: number
+  verified_changed_path_count: number
+  unverified_changed_path_count: number
+  missing_test_paths: string[]
+  coverage_summary: string
+}
+
+export interface ExistingFeatureImpactItem {
+  capability_key: string
+  name: string
+  impact_status: string
+  technical_entrypoints: string[]
+  changed_files: string[]
+  related_modules: string[]
+  verification_status: string
+  impact_basis: Array<Record<string, unknown>>
+}
+
+export interface ChangeRiskSummary {
+  headline: ChangeRiskHeadline
+  coverage: ChangeRiskCoverage
+  existing_feature_impact: {
+    business_impact_summary: string
+    affected_capability_count: number
+    affected_capabilities: ExistingFeatureImpactItem[]
+  }
+  risk_signals: Array<{
+    signal_key: string
+    title: string
+    severity: 'high' | 'medium' | 'low'
+    reason: string
+    related_files: string[]
+    related_modules: string[]
+    mitigation: string
+  }>
+  agent_metadata: {
+    agent_based_fields: string[]
+    rule_based_fields: string[]
+  }
+}
+
+// ─── Test Assets ─────────────────────────────────────────────────────────────
+
+export interface TestAssetCapabilityCoverage {
+  capability_key: string
+  business_capability: string
+  coverage_status: 'covered' | 'partial' | 'missing' | 'unknown'
+  technical_entrypoints: string[]
+  covered_paths: string[]
+  covering_tests: string[]
+  gaps: string[]
+  maintenance_recommendation: string
+}
+
+export interface TestAssetFile {
+  path: string
+  maintenance_status: 'keep' | 'update' | 'retire' | 'unknown'
+  covered_capabilities: string[]
+  covered_paths: string[]
+  linked_entrypoints: string[]
+  invalidation_reasons: string[]
+  recommendation: string
+  evidence_status: string
+}
+
+export interface TestAssetSummary {
+  health_status: 'healthy' | 'needs_maintenance' | 'high_risk' | 'unknown'
+  total_test_file_count: number
+  affected_test_count: number
+  changed_test_file_count: number
+  stale_or_invalid_test_count: number
+  duplicate_or_low_value_test_count: number
+  coverage_gaps: string[]
+  recommended_actions: string[]
+  capability_coverage: TestAssetCapabilityCoverage[]
+  test_files: TestAssetFile[]
+}
+
+// ─── File Review Summaries ───────────────────────────────────────────────────
+
+export interface FileDiffSnippet {
+  type: 'add' | 'delete' | 'context'
+  line: string
+  text: string
+}
+
+export interface FileReviewSummary {
+  path: string
+  file_role: string
+  risk_level: 'high' | 'medium' | 'low' | 'unknown'
+  diff_summary: string
+  diff_snippets: FileDiffSnippet[]
+  product_meaning: string
+  intent_evidence?: string[]
+  review_focus: string[]
+  related_entrypoints: string[]
+  related_capabilities: string[]
+  related_tests: string[]
+  evidence_basis: string[]
+  generated_by: 'rules' | 'agent' | 'rules+agent'
 }
 
 // ─── Capability Map ───────────────────────────────────────────────────────────
@@ -45,6 +195,10 @@ export interface CapabilityItem {
   linked_routes: string[]
   is_primary_target?: boolean
   reasoning_basis?: Record<string, unknown>
+  impact_status?: AgentHarnessCapability['impact_status']
+  impact_reason?: string
+  related_themes?: string[]
+  verification_status?: AgentHarnessCapability['verification_status']
 }
 
 // ─── Journeys ────────────────────────────────────────────────────────────────
@@ -92,6 +246,8 @@ export interface RecentAIChange {
   change_id: string
   change_title: string
   summary: string
+  affected_capabilities: string[]
+  technical_entrypoints: string[]
   changed_files: string[]
   changed_symbols: string[]
   changed_routes: string[]
@@ -132,6 +288,160 @@ export interface VerificationStatus {
   evidence_by_path: Record<string, unknown>
 }
 
+// ─── Review Graph ────────────────────────────────────────────────────────────
+
+export type ReviewGraphObjectType = 'FeatureContainer' | 'CodeUnit' | 'TestUnit' | 'EvidenceGroup'
+
+export interface ReviewGraphRef {
+  kind: string
+  value: string
+}
+
+export interface ReviewGraphNode {
+  id: string
+  type: ReviewGraphObjectType
+  label: string
+  match_status: 'direct' | 'expanded'
+  layers: Array<'feature' | 'impact'>
+  refs: ReviewGraphRef[]
+}
+
+export interface ReviewGraphEdge {
+  from: string
+  to: string
+  type: string
+  layers: Array<'feature' | 'impact'>
+}
+
+export interface ReviewGraphSummary {
+  title: string
+  direct_feature_count: number
+  impacted_feature_count: number
+  verification_gap_count: number
+  mapping_status?: 'missing' | 'invalid'
+}
+
+export interface ReviewGraphResponse {
+  version: 'v1'
+  change_id: string
+  summary: ReviewGraphSummary
+  nodes: ReviewGraphNode[]
+  edges: ReviewGraphEdge[]
+  unresolved_refs: string[]
+}
+
+// ─── Agentic Change Assessment ───────────────────────────────────────────────
+
+export type AssessmentRiskLevel = 'high' | 'medium' | 'low' | 'unknown'
+export type AssessmentCoverageStatus = 'covered' | 'partial' | 'missing' | 'unknown'
+export type AssessmentReviewStatus = 'unreviewed' | 'reviewed' | 'needs_follow_up' | 'needs_recheck'
+
+export interface AssessmentSummary {
+  headline: string
+  overall_risk_level: AssessmentRiskLevel
+  coverage_status: AssessmentCoverageStatus
+  changed_file_count: number
+  unreviewed_file_count: number
+  affected_capability_count: number
+  missing_test_count: number
+  agent_sources: string[]
+  recommended_review_order: string[]
+}
+
+export interface ChangedFileSummary {
+  file_id: string
+  path: string
+  old_path: string | null
+  status: string
+  additions: number
+  deletions: number
+  risk_level: AssessmentRiskLevel
+  coverage_status: AssessmentCoverageStatus
+  review_status: AssessmentReviewStatus
+  agent_sources: string[]
+  diff_fingerprint: string
+}
+
+export interface AssessmentManifest {
+  assessment_id: string
+  workspace_snapshot_id: string
+  repo_key: string
+  status: 'ready' | 'partial' | 'failed'
+  summary: AssessmentSummary
+  file_list: ChangedFileSummary[]
+  risk_signals_summary: Array<Record<string, unknown>>
+  agent_sources: string[]
+  review_progress: {
+    total: number
+    reviewed: number
+    needs_follow_up: number
+    needs_recheck: number
+    unreviewed: number
+  }
+}
+
+export interface DiffLine {
+  type: 'add' | 'remove' | 'context' | 'header'
+  content: string
+}
+
+export interface DiffHunk {
+  hunk_id: string
+  old_start: number
+  old_lines: number
+  new_start: number
+  new_lines: number
+  hunk_fingerprint: string
+  lines: DiffLine[]
+}
+
+export interface AgentChangeRecord {
+  record_id: string
+  source: string
+  capture_level: 'full' | 'partial' | 'diff_only'
+  evidence_sources: string[]
+  confidence: Record<string, 'high' | 'medium' | 'low'>
+  task_summary: string
+  declared_intent: string
+  reasoning_summary: string
+  files_touched: string[]
+  commands_run: string[]
+  tests_run: Array<{ command: string; status: string }>
+  known_limitations: string[]
+  raw_log_ref: string
+}
+
+export interface TestRelationship {
+  test_id: string
+  path: string
+  relationship: 'primary' | 'secondary' | 'inferred'
+  confidence: 'high' | 'medium' | 'low'
+  last_status: 'passed' | 'failed' | 'not_run' | 'unknown'
+  evidence: 'marker' | 'naming_convention' | 'graph_inference' | 'agent_claim'
+}
+
+export interface ChangedFileDetail {
+  file: ChangedFileSummary
+  diff_hunks: DiffHunk[]
+  changed_symbols: string[]
+  related_agent_records: AgentChangeRecord[]
+  related_tests: TestRelationship[]
+  impact_facts: Array<Record<string, unknown>>
+  file_assessment: {
+    why_changed: string
+    impact_summary: string
+    test_summary: string
+    recommended_action: string
+  }
+  review_state: {
+    review_status: AssessmentReviewStatus
+    diff_fingerprint: string
+    reviewer: string | null
+    reviewed_at: string | null
+    notes: string[]
+  }
+}
+
 // ─── Overview Response ────────────────────────────────────────────────────────
 
 export interface OverviewResponse {
@@ -141,6 +451,12 @@ export interface OverviewResponse {
   capability_map: CapabilityItem[]
   journeys: JourneyItem[]
   architecture_overview: ArchitectureOverview
+  change_themes?: AgentHarnessChangeTheme[]
+  change_risk_summary: ChangeRiskSummary
+  test_asset_summary?: TestAssetSummary
+  file_review_summaries?: FileReviewSummary[]
+  agent_harness_status?: AgentHarnessStatus | null
+  agent_harness_metadata?: Record<string, unknown>
   recent_ai_changes: RecentAIChange[]
   verification_status: VerificationStatus
   warnings: string[]
