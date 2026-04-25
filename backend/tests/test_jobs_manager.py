@@ -15,10 +15,12 @@ class WorkspaceSnapshotServiceTest(unittest.TestCase):
         service = WorkspaceSnapshotService()
 
         def fake_run(cmd, cwd, capture_output, text, check):
+            if cmd[:2] == ["git", "rev-parse"]:
+                return SimpleNamespace(stdout="true\n")
             return SimpleNamespace(stdout=" M app/main.py\n?? docs/readme.md\n")
 
-        with tempfile.TemporaryDirectory() as tmp_dir, patch("app.services.workspace_snapshot.service.subprocess.run", side_effect=fake_run), patch(
-            "app.services.workspace_snapshot.service.os.path.exists", return_value=True
+        with tempfile.TemporaryDirectory() as tmp_dir, patch(
+            "app.services.workspace_snapshot.service.subprocess.run", side_effect=fake_run
         ):
             snapshot_a = service.capture("demo", tmp_dir, base_commit_sha="HEAD", include_untracked=True)
             snapshot_b = service.capture("demo", tmp_dir, base_commit_sha="HEAD", include_untracked=True)
@@ -28,8 +30,44 @@ class WorkspaceSnapshotServiceTest(unittest.TestCase):
         self.assertEqual(snapshot_a.workspace_snapshot_id, snapshot_b.workspace_snapshot_id)
         self.assertEqual(snapshot_a.fingerprint, snapshot_b.fingerprint)
 
+    def test_capture_accepts_git_worktree_metadata_file(self):
+        service = WorkspaceSnapshotService()
+
+        def fake_run(cmd, cwd, capture_output, text, check):
+            if cmd[:2] == ["git", "rev-parse"]:
+                return SimpleNamespace(stdout="true\n")
+            return SimpleNamespace(stdout="")
+
+        with tempfile.TemporaryDirectory() as tmp_dir, patch(
+            "app.services.workspace_snapshot.service.subprocess.run", side_effect=fake_run
+        ), patch("app.services.workspace_snapshot.service.os.path.exists", return_value=False):
+            snapshot = service.capture("demo", tmp_dir, base_commit_sha="HEAD", include_untracked=True)
+
+        self.assertFalse(snapshot.has_pending_changes)
+        self.assertEqual(snapshot.changed_files, [])
+
 
 class JobManagerTest(unittest.IsolatedAsyncioTestCase):
+    async def test_trigger_rebuild_resolves_workspace_path_from_local_candidates(self):
+        manager = JobManager(data_dir=tempfile.mkdtemp())
+
+        def _discard_task(coro):
+            coro.close()
+            return None
+
+        with tempfile.TemporaryDirectory() as tmp_root, patch(
+            "app.services.jobs.manager.Path.home", return_value=__import__("pathlib").Path(tmp_root)
+        ), patch.object(
+            manager.workspace_snapshot_service,
+            "is_git_workspace",
+            side_effect=lambda path: path == f"{tmp_root}/divide_prd_to_ui",
+        ), patch(
+            "app.services.jobs.manager.asyncio.create_task", side_effect=_discard_task
+        ):
+            job_id = await manager.trigger_rebuild(repo_key="divide_prd_to_ui")
+
+        self.assertEqual(manager.job_registry[job_id].workspace_path, f"{tmp_root}/divide_prd_to_ui")
+
     async def test_trigger_rebuild_preserves_include_untracked_flag(self):
         manager = JobManager(data_dir=tempfile.mkdtemp())
         captured = {}
@@ -106,10 +144,16 @@ class JobManagerTest(unittest.IsolatedAsyncioTestCase):
             "app.services.jobs.manager.VerificationAdapter", side_effect=AssertionError("VerificationAdapter should not be used")
         ), patch(
             "app.services.jobs.manager.snapshot_store.save_overview",
-            side_effect=lambda repo, snapshot_id, payload: save_overview_calls.append((repo, snapshot_id, payload)),
+            side_effect=lambda repo, snapshot_id, payload, **kwargs: save_overview_calls.append((repo, snapshot_id, payload, kwargs)),
+        ), patch(
+            "app.services.jobs.manager.snapshot_store.save_assessment_manifest"
+        ), patch(
+            "app.services.jobs.manager.snapshot_store.save_assessment_file_detail"
+        ), patch(
+            "app.services.jobs.manager.snapshot_store.save_assessment_review_state"
         ), patch(
             "app.services.jobs.manager.snapshot_store.update_latest_pointer",
-            side_effect=lambda repo, payload: update_latest_calls.append((repo, payload)),
+            side_effect=lambda repo, payload, **kwargs: update_latest_calls.append((repo, payload, kwargs)),
         ):
             await manager._run_rebuild_flow(job.job_id, manager._get_repo_lock(repo_key))
 
@@ -119,8 +163,10 @@ class JobManagerTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(capture_mock.call_count, 1)
         self.assertEqual(len(save_overview_calls), 1)
         self.assertFalse(save_overview_calls[0][2]["snapshot"]["has_pending_changes"])
+        self.assertEqual(save_overview_calls[0][3]["workspace_path"], "/tmp/demo")
         self.assertEqual(len(update_latest_calls), 1)
         self.assertFalse(update_latest_calls[0][1]["has_pending_changes"])
+        self.assertEqual(update_latest_calls[0][2]["workspace_path"], "/tmp/demo")
 
     async def test_run_rebuild_flow_runs_analysis_when_changes_exist(self):
         manager = JobManager(data_dir=tempfile.mkdtemp())
@@ -162,7 +208,7 @@ class JobManagerTest(unittest.IsolatedAsyncioTestCase):
         change_payload = {
             "base_commit_sha": "HEAD",
             "workspace_snapshot_id": "ws_pending_123",
-            "change_title": "Workspace diff (1 files)",
+            "change_title": "工作区差异（1 个文件）",
             "changed_files": ["app/main.py"],
             "changed_symbols": ["handler"],
             "changed_routes": [],
@@ -190,9 +236,18 @@ class JobManagerTest(unittest.IsolatedAsyncioTestCase):
         }
 
         save_overview_calls = []
+        save_assessment_manifest_calls = []
+        save_assessment_file_detail_calls = []
+        save_assessment_review_state_calls = []
         update_latest_calls = []
+        scheduled_steps = []
 
         class _FakeLoop:
+            def call_soon_threadsafe(self, callback, *args):
+                if len(args) >= 3:
+                    scheduled_steps.append(args[2])
+                callback(*args)
+
             async def run_in_executor(self, executor, func, *args):
                 return func(*args)
 
@@ -225,6 +280,9 @@ class JobManagerTest(unittest.IsolatedAsyncioTestCase):
         ), patch(
             "app.services.jobs.manager.VerificationAdapter", _FakeVerificationAdapter
         ), patch(
+            "app.services.jobs.manager.ReviewGraphAdapter.build",
+            return_value={"version": "v1", "summary": {"title": "workspace diff"}, "nodes": [], "edges": [], "unresolved_refs": []},
+        ), patch(
             "app.services.jobs.manager.asyncio.get_running_loop", return_value=_FakeLoop()
         ), patch(
             "app.services.jobs.manager.snapshot_store.save_graph_snapshot"
@@ -233,21 +291,46 @@ class JobManagerTest(unittest.IsolatedAsyncioTestCase):
         ) as save_change_mock, patch(
             "app.services.jobs.manager.snapshot_store.save_verification"
         ) as save_verification_mock, patch(
+            "app.services.jobs.manager.snapshot_store.save_review_graph"
+        ) as save_review_graph_mock, patch(
+            "app.services.jobs.manager.snapshot_store.save_assessment_manifest",
+            side_effect=lambda repo, snapshot_id, payload, **kwargs: save_assessment_manifest_calls.append((repo, snapshot_id, payload, kwargs)),
+        ), patch(
+            "app.services.jobs.manager.snapshot_store.save_assessment_file_detail",
+            side_effect=lambda repo, snapshot_id, file_id, payload, **kwargs: save_assessment_file_detail_calls.append((repo, snapshot_id, file_id, payload, kwargs)),
+        ), patch(
+            "app.services.jobs.manager.snapshot_store.save_assessment_review_state",
+            side_effect=lambda repo, snapshot_id, payload, **kwargs: save_assessment_review_state_calls.append((repo, snapshot_id, payload, kwargs)),
+        ), patch(
             "app.services.jobs.manager.snapshot_store.save_overview",
-            side_effect=lambda repo, snapshot_id, payload: save_overview_calls.append((repo, snapshot_id, payload)),
+            side_effect=lambda repo, snapshot_id, payload, **kwargs: save_overview_calls.append((repo, snapshot_id, payload, kwargs)),
         ), patch(
             "app.services.jobs.manager.snapshot_store.update_latest_pointer",
-            side_effect=lambda repo, payload: update_latest_calls.append((repo, payload)),
+            side_effect=lambda repo, payload, **kwargs: update_latest_calls.append((repo, payload, kwargs)),
         ):
             await manager._run_rebuild_flow(job.job_id, manager._get_repo_lock(repo_key))
 
         self.assertEqual(manager.job_registry[job.job_id].status, "success")
         self.assertEqual(manager.job_registry[job.job_id].workspace_snapshot_id, "ws_pending_123")
+        self.assertIn("prepare_agent_context", scheduled_steps)
+        self.assertIn("build_overview_payload", scheduled_steps)
         self.assertEqual(len(save_graph_mock.call_args_list), 1)
         self.assertEqual(len(save_change_mock.call_args_list), 1)
         self.assertEqual(len(save_verification_mock.call_args_list), 1)
+        self.assertEqual(len(save_review_graph_mock.call_args_list), 1)
         self.assertEqual(len(save_overview_calls), 1)
+        self.assertEqual(save_overview_calls[0][3]["workspace_path"], "/tmp/demo")
+        self.assertEqual(len(save_assessment_manifest_calls), 1)
+        self.assertEqual(save_assessment_manifest_calls[0][2]["assessment_id"], "aca_ws_pending_123")
+        self.assertEqual(save_assessment_manifest_calls[0][3]["workspace_path"], "/tmp/demo")
+        self.assertEqual(len(save_assessment_file_detail_calls), 1)
+        self.assertEqual(save_assessment_file_detail_calls[0][4]["workspace_path"], "/tmp/demo")
+        self.assertEqual(save_assessment_file_detail_calls[0][3]["file"]["path"], "app/main.py")
+        self.assertEqual(len(save_assessment_review_state_calls), 1)
+        self.assertEqual(save_assessment_review_state_calls[0][2]["scope"], "assessment")
+        self.assertIn("agentic_change_assessment", save_overview_calls[0][2])
         self.assertTrue(update_latest_calls[0][1]["has_pending_changes"])
+        self.assertEqual(update_latest_calls[0][2]["workspace_path"], "/tmp/demo")
 
 
 if __name__ == "__main__":
