@@ -1,0 +1,23 @@
+.panel {
+  overflow: auto;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.panel section {
+  padding: 0 0 14px;
+  margin: 0 0 14px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.panel h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.panel p {
+  margin: 0 0 6px;
+  color: #4b5563;
+  font-size: 13px;
+  line-height: 1.45;
+}
