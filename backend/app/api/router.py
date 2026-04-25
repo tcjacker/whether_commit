@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.endpoints import overview, jobs, capabilities, changes, verification
+from app.api.endpoints import overview, jobs, capabilities, changes, verification, review_graph, assessments
 
 api_router = APIRouter()
 
@@ -11,3 +11,5 @@ api_router.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
 api_router.include_router(capabilities.router, prefix="/capabilities", tags=["capabilities"])
 api_router.include_router(changes.router, prefix="/changes", tags=["changes"])
 api_router.include_router(verification.router, prefix="/verification", tags=["verification"])
+api_router.include_router(review_graph.router, prefix="/changes/review-graph", tags=["review-graph"])
+api_router.include_router(assessments.router, prefix="/assessments", tags=["assessments"])
