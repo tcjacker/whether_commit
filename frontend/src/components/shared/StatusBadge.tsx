@@ -1,18 +1,19 @@
 import styles from './StatusBadge.module.css'
+import { zhStatus } from '../../i18n'
 
 type Status = 'passed' | 'failed' | 'unknown' | 'warning' | 'running' |
               'recently_changed' | 'stable' | 'needs_review' | 'partial' | string
 
 const LABEL_MAP: Record<string, string> = {
-  passed: 'Passed',
-  failed: 'Failed',
-  unknown: 'Unknown',
-  warning: 'Warning',
-  running: 'Running',
-  recently_changed: 'Changed',
-  stable: 'Stable',
-  needs_review: 'Review',
-  partial: 'Partial',
+  passed: '通过',
+  failed: '失败',
+  unknown: '未知',
+  warning: '警告',
+  running: '运行中',
+  recently_changed: '最近变更',
+  stable: '稳定',
+  needs_review: '需复查',
+  partial: '部分完成',
 }
 
 interface Props {
@@ -22,7 +23,7 @@ interface Props {
 
 export function StatusBadge({ status, label }: Props) {
   const cls = STATUS_CLASS[status] ?? styles.unknown
-  const text = label ?? LABEL_MAP[status] ?? status
+  const text = label ?? LABEL_MAP[status] ?? zhStatus(status)
   return <span className={`${styles.badge} ${cls}`}>{text}</span>
 }
 

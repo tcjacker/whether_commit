@@ -41,7 +41,7 @@ export function DiffViewer({ repoKey, filePath, onClose }: Props) {
     setError(null)
     const params = new URLSearchParams({ repo_key: repoKey, file_path: filePath })
     fetch(`/api/changes/file-diff?${params}`)
-      .then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e.detail ?? 'Error')))
+      .then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e.detail ?? '加载失败')))
       .then(data => { setDiff(data.diff); setLoading(false) })
       .catch(e => { setError(String(e)); setLoading(false) })
   }, [repoKey, filePath])
@@ -54,18 +54,18 @@ export function DiffViewer({ repoKey, filePath, onClose }: Props) {
       <div className={styles.panel} onClick={e => e.stopPropagation()}>
         <div className={styles.toolbar}>
           <span className={styles.fileName}>{filePath}</span>
-          <button className={styles.closeBtn} onClick={onClose} aria-label="Close diff">✕</button>
+          <button className={styles.closeBtn} onClick={onClose} aria-label="关闭差异视图">✕</button>
         </div>
 
         <div className={styles.body}>
           {loading && (
-            <div className={styles.center}>Loading diff for <code>{shortName}</code>…</div>
+            <div className={styles.center}>正在加载 <code>{shortName}</code> 的差异…</div>
           )}
           {error && (
             <div className={styles.errorMsg}>{error}</div>
           )}
           {!loading && !error && lines.length === 0 && (
-            <div className={styles.center}>No diff available for this file.</div>
+            <div className={styles.center}>该文件暂无可用差异。</div>
           )}
           {!loading && !error && lines.length > 0 && (
             <table className={styles.table}>

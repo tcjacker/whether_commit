@@ -1,0 +1,180 @@
+version: 1
+objects:
+  - id: feature.change_impact
+    type: FeatureContainer
+    label: change_impact
+    refs:
+      - kind: file
+        value: backend/app/services/change_impact/adapter.py
+  - id: feature.verification
+    type: FeatureContainer
+    label: verification
+    refs:
+      - kind: file
+        value: backend/app/services/verification/adapter.py
+  - id: code.change_impact_adapter
+    type: CodeUnit
+    label: ChangeImpactAdapter
+    refs:
+      - kind: symbol
+        value: backend.app.services.change_impact.adapter.ChangeImpactAdapter
+  - id: code.verification_adapter
+    type: CodeUnit
+    label: VerificationAdapter
+    refs:
+      - kind: symbol
+        value: backend.app.services.verification.adapter.VerificationAdapter
+  - id: test.change_impact
+    type: TestUnit
+    label: test_change_impact_adapter
+    refs:
+      - kind: test_file
+        value: backend/tests/test_change_impact_adapter.py
+  - id: test.verification
+    type: TestUnit
+    label: test_verification_adapter
+    refs:
+      - kind: test_file
+        value: backend/tests/test_verification_adapter.py
+  - id: feature.editor_service
+    type: FeatureContainer
+    label: EditorService
+    refs:
+      - kind: file
+        value: backend/app/services/editor.py
+  - id: feature.orchestrator
+    type: FeatureContainer
+    label: Orchestrator
+    refs:
+      - kind: file
+        value: backend/app/services/orchestrator.py
+  - id: feature.pipeline
+    type: FeatureContainer
+    label: Pipeline
+    refs:
+      - kind: file
+        value: backend/app/services/pipeline.py
+  - id: feature.planner
+    type: FeatureContainer
+    label: Planner
+    refs:
+      - kind: file
+        value: backend/app/services/planner.py
+  - id: feature.vfs_supervisor
+    type: FeatureContainer
+    label: VfsSupervisor
+    refs:
+      - kind: file
+        value: backend/app/services/vfs_supervisor.py
+  - id: code.editor_service
+    type: CodeUnit
+    label: EditorService
+    refs:
+      - kind: symbol
+        value: EditorService
+  - id: code.orchestrator
+    type: CodeUnit
+    label: Orchestrator
+    refs:
+      - kind: symbol
+        value: Orchestrator
+  - id: code.pipeline
+    type: CodeUnit
+    label: Pipeline
+    refs:
+      - kind: symbol
+        value: Pipeline
+  - id: code.planner
+    type: CodeUnit
+    label: Planner
+    refs:
+      - kind: symbol
+        value: Planner
+  - id: code.vfs_supervisor
+    type: CodeUnit
+    label: VfsSupervisor
+    refs:
+      - kind: symbol
+        value: VfsSupervisor
+  - id: test.editor_service_command
+    type: TestUnit
+    label: test_editor_service_command
+    refs:
+      - kind: test_file
+        value: tests/test_editor_service_command.py
+  - id: test.pipeline_orchestrator_integration
+    type: TestUnit
+    label: test_pipeline_orchestrator_integration
+    refs:
+      - kind: test_file
+        value: tests/test_pipeline_orchestrator_integration.py
+  - id: test.planner_unit
+    type: TestUnit
+    label: test_planner_unit
+    refs:
+      - kind: test_file
+        value: tests/test_planner_unit.py
+  - id: test.pipeline_outputs_tax_labor
+    type: TestUnit
+    label: test_pipeline_outputs_tax_labor
+    refs:
+      - kind: test_file
+        value: tests/test_pipeline_outputs_tax_labor.py
+  - id: test.vfs_supervisor
+    type: TestUnit
+    label: test_vfs_supervisor
+    refs:
+      - kind: test_file
+        value: tests/test_vfs_supervisor.py
+relations:
+  - from: feature.change_impact
+    to: code.change_impact_adapter
+    type: owns
+  - from: feature.verification
+    to: code.verification_adapter
+    type: owns
+  - from: test.change_impact
+    to: feature.change_impact
+    type: verifies_primary
+  - from: test.verification
+    to: feature.verification
+    type: verifies_primary
+  - from: feature.editor_service
+    to: code.editor_service
+    type: owns
+  - from: feature.orchestrator
+    to: code.orchestrator
+    type: owns
+  - from: feature.pipeline
+    to: code.pipeline
+    type: owns
+  - from: feature.planner
+    to: code.planner
+    type: owns
+  - from: feature.vfs_supervisor
+    to: code.vfs_supervisor
+    type: owns
+  - from: test.editor_service_command
+    to: feature.editor_service
+    type: verifies_primary
+  - from: test.pipeline_orchestrator_integration
+    to: feature.orchestrator
+    type: verifies_primary
+  - from: test.pipeline_orchestrator_integration
+    to: feature.pipeline
+    type: verifies_secondary
+  - from: test.pipeline_outputs_tax_labor
+    to: feature.pipeline
+    type: verifies_primary
+  - from: test.planner_unit
+    to: feature.planner
+    type: verifies_primary
+  - from: test.vfs_supervisor
+    to: feature.vfs_supervisor
+    type: verifies_primary
+  - from: code.planner
+    to: feature.orchestrator
+    type: impacts
+  - from: code.pipeline
+    to: feature.vfs_supervisor
+    type: impacts

@@ -4,6 +4,31 @@
   flex-direction: column;
 }
 
+.noticeBar {
+  margin: 16px 20px 0;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent-light) 30%, var(--border));
+  border-radius: var(--radius-lg, 16px);
+  background: color-mix(in srgb, var(--accent-light) 10%, var(--surface));
+  color: var(--text);
+  flex-wrap: wrap;
+}
+
+.noticeBar strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent-light);
+}
+
+.noticeBar span {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 .centered {
   flex: 1;
   display: flex;

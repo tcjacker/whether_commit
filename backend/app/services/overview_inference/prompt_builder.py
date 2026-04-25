@@ -62,6 +62,7 @@ class ReasoningPromptBuilder:
                 "Preserve unknowns explicitly when evidence is missing.",
                 "In evidence_used, cite only specific values from normalized_facts such as file paths, module IDs, route strings, schema names, job names, graph edge endpoints, or verification evidence keys.",
                 "Do not cite field names, container names, or paths like normalized_facts.changed_files in evidence_used.",
+                "Return all natural-language fields in Simplified Chinese.",
                 "Return structured JSON only.",
             ],
         }
@@ -120,9 +121,9 @@ class ReasoningPromptBuilder:
     def _derive_unknowns(self, graph_data: Dict[str, Any], verification_data: Dict[str, Any]) -> List[str]:
         unknowns: List[str] = []
         if not graph_data.get("dependencies") and not graph_data.get("relationships"):
-            unknowns.append("Dependency graph is missing, so transitive impact must stay conservative.")
+            unknowns.append("依赖图缺失，因此传递影响只能保持保守推断。")
         if not verification_data.get("affected_tests"):
-            unknowns.append("Verification evidence is missing for the changed surface.")
+            unknowns.append("变更面缺少验证证据。")
         if not verification_data.get("evidence_by_path"):
-            unknowns.append("Path-level verification evidence was not provided.")
+            unknowns.append("未提供路径级验证证据。")
         return unknowns

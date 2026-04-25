@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import ast
+import json
 import os
 import subprocess
 from collections import deque
+from pathlib import Path
 from typing import Any, Dict, List, Set, Tuple
 
 from app.services.change_impact.job_extractors import extract_changed_job_facts
@@ -94,6 +96,196 @@ class ChangeImpactAdapter:
             current_line += 1
 
         return changed_lines
+
+    def _change_type_for_status(self, status: str) -> str:
+        if status == "??":
+            return "new file"
+        if "D" in status:
+            return "deleted file"
+        if "R" in status:
+            return "renamed file"
+        if "A" in status:
+            return "new file"
+        if "M" in status:
+            return "modified file"
+        return "changed file"
+
+    def _diff_text_for_entry(self, path: str, status: str) -> str:
+        if status == "??":
+            full_path = os.path.join(self.workspace_path, path)
+            if not os.path.exists(full_path):
+                return ""
+            try:
+                with open(full_path, "r", encoding="utf-8", errors="replace") as f:
+                    lines = f.readlines()[:200]
+            except OSError:
+                return ""
+            header = [
+                f"diff --git a/{path} b/{path}",
+                "new file mode 100644",
+                "index 0000000..0000000",
+                "--- /dev/null",
+                f"+++ b/{path}",
+                f"@@ -0,0 +1,{len(lines)} @@",
+            ]
+            return "\n".join(header + [f"+{line.rstrip(chr(10))}" for line in lines]) + "\n"
+
+        return "\n".join(
+            diff
+            for diff in [
+                self._git_diff_for_file(path, staged=True),
+                self._git_diff_for_file(path, staged=False),
+            ]
+            if diff
+        )
+
+    def _parse_file_diff_stats(self, diff_text: str, status: str) -> Dict[str, Any]:
+        added_lines = 0
+        deleted_lines = 0
+        snippets: List[str] = []
+
+        for raw_line in diff_text.splitlines():
+            if raw_line.startswith(("+++", "---", "@@", "diff --git", "index ")):
+                continue
+            if raw_line.startswith("+"):
+                added_lines += 1
+                text = raw_line[1:].strip()
+                if text and len(snippets) < 8:
+                    snippets.append(text[:180])
+                continue
+            if raw_line.startswith("-"):
+                deleted_lines += 1
+                text = raw_line[1:].strip()
+                if text and len(snippets) < 8:
+                    snippets.append(f"removed: {text[:170]}")
+
+        return {
+            "added_lines": added_lines,
+            "deleted_lines": deleted_lines,
+            "change_type": self._change_type_for_status(status),
+            "snippets": snippets,
+        }
+
+    def _build_file_diff_stats(self, entries: List[Dict[str, str]]) -> Dict[str, Dict[str, Any]]:
+        stats_by_path: Dict[str, Dict[str, Any]] = {}
+        for entry in entries:
+            path = entry["path"]
+            try:
+                diff_text = self._diff_text_for_entry(path, entry["status"])
+            except subprocess.CalledProcessError:
+                continue
+            stats_by_path[path] = self._parse_file_diff_stats(diff_text, entry["status"])
+        return stats_by_path
+
+    def _build_file_diffs(self, entries: List[Dict[str, str]]) -> Dict[str, str]:
+        diffs_by_path: Dict[str, str] = {}
+        for entry in entries:
+            path = entry["path"]
+            try:
+                diff_text = self._diff_text_for_entry(path, entry["status"])
+            except subprocess.CalledProcessError:
+                continue
+            diffs_by_path[path] = diff_text
+        return diffs_by_path
+
+    def _agent_log_candidates(self) -> List[Path]:
+        home = Path.home()
+        candidates = [
+            home / ".codex" / "history.jsonl",
+            home / ".codex" / "session_index.jsonl",
+        ]
+        escaped_workspace = self.workspace_path.replace("/", "-")
+        claude_project_dir = home / ".claude" / "projects" / escaped_workspace
+        if claude_project_dir.is_dir():
+            candidates.extend(sorted(claude_project_dir.glob("*.jsonl")))
+            candidates.extend(sorted(claude_project_dir.glob("*.json")))
+        return candidates
+
+    def _text_from_agent_log_line(self, raw_line: str) -> str:
+        line = raw_line.strip()
+        if not line:
+            return ""
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            return line[:500]
+
+        if isinstance(payload, dict):
+            parts: List[str] = []
+            for key in ("text", "thread_name", "summary", "content", "message"):
+                value = payload.get(key)
+                if isinstance(value, str):
+                    parts.append(value)
+                elif isinstance(value, dict):
+                    nested = value.get("content") or value.get("text")
+                    if isinstance(nested, str):
+                        parts.append(nested)
+            return " ".join(parts)[:500]
+        return str(payload)[:500]
+
+    def _collect_agent_activity_evidence(self, changed_files: List[str]) -> List[Dict[str, Any]]:
+        generic_basenames = {
+            "service.py",
+            "adapter.py",
+            "store.py",
+            "manager.py",
+            "index.ts",
+            "api.ts",
+            "types.ts",
+        }
+        path_needles = {
+            path: {
+                needle
+                for needle in {
+                    path.lower(),
+                    "/".join(path.lower().split("/")[-3:]),
+                    "/".join(path.lower().split("/")[-2:]),
+                    os.path.basename(path).lower() if os.path.basename(path).lower() not in generic_basenames else "",
+                }
+                if needle
+            }
+            for path in changed_files
+            if path
+        }
+        evidence: List[Dict[str, Any]] = []
+        seen: set[tuple[str, str]] = set()
+
+        for candidate in self._agent_log_candidates():
+            if not candidate.exists() or not candidate.is_file():
+                continue
+            source = "claude_code" if ".claude" in str(candidate) else "codex"
+            try:
+                lines = candidate.read_text(encoding="utf-8", errors="replace").splitlines()[-400:]
+            except OSError:
+                continue
+
+            for raw_line in lines:
+                text = self._text_from_agent_log_line(raw_line)
+                if not text:
+                    continue
+                lower = text.lower()
+                related_files = [
+                    path
+                    for path, needles in path_needles.items()
+                    if any(needle and needle in lower for needle in needles)
+                ]
+                if not related_files:
+                    continue
+                summary = " ".join(text.split())[:240]
+                key = (source, summary)
+                if key in seen:
+                    continue
+                seen.add(key)
+                evidence.append(
+                    {
+                        "source": source,
+                        "summary": summary,
+                        "related_files": related_files[:8],
+                    }
+                )
+                if len(evidence) >= 30:
+                    return evidence
+        return evidence
 
     def _extract_routes_for_node(self, node: ast.AST) -> List[str]:
         routes: List[str] = []
@@ -358,6 +550,12 @@ class ChangeImpactAdapter:
             graph_data = self._load_graph_snapshot()
 
             changed_files: List[str] = [entry["path"] for entry in entries]
+            file_diffs = self._build_file_diffs(entries)
+            file_diff_stats = {
+                entry["path"]: self._parse_file_diff_stats(file_diffs.get(entry["path"], ""), entry["status"])
+                for entry in entries
+            }
+            agent_activity_evidence = self._collect_agent_activity_evidence(changed_files)
             changed_symbols: List[str] = []
             changed_functions: List[str] = []
             changed_classes: List[str] = []
@@ -436,8 +634,11 @@ class ChangeImpactAdapter:
 
             return {
                 "base_commit_sha": self.base_commit_sha,
-                "change_title": f"Workspace diff ({len(changed_files)} files)",
+                "change_title": f"工作区差异（{len(changed_files)} 个文件）",
                 "changed_files": changed_files,
+                "file_diff_stats": file_diff_stats,
+                "file_diffs": file_diffs,
+                "agent_activity_evidence": agent_activity_evidence,
                 "changed_symbols": sorted(set(changed_symbols)),
                 "changed_functions": sorted(set(changed_functions)),
                 "changed_classes": sorted(set(changed_classes)),

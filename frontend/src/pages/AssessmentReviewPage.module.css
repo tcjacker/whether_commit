@@ -1,14 +1,18 @@
 .page {
-  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
   background: #f6f7f9;
   color: #1f2937;
 }
 
 .workspace {
+  flex: 1;
   display: grid;
   grid-template-columns: minmax(260px, 320px) minmax(420px, 1fr) minmax(300px, 380px);
   gap: 1px;
-  min-height: calc(100vh - 112px);
+  min-height: 0;
   border-top: 1px solid #d9dee7;
   background: #d9dee7;
 }

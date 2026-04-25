@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Change Review Graph Mockup V1</title>
+  <style>
+    :root {
+      --bg: #eef3f1;
+      --bg-2: #dde8e3;
+      --panel: rgba(255, 255, 255, 0.84);
+      --card: #fbfdfc;
+      --border: #bfd0c8;
+      --text: #143126;
+      --muted: #567066;
+      --accent: #165d4a;
+      --accent-2: #2f8f73;
+      --feature: #0f6a57;
+      --code: #1f4d80;
+      --impact: #b56d1b;
+      --evidence: #6b7280;
+      --ok: #188a5a;
+      --warn: #c97b18;
+      --gap: #869298;
+      --shadow: 0 18px 50px rgba(25, 54, 43, 0.08);
+      --radius-xl: 26px;
+      --radius-lg: 18px;
+      --radius-md: 14px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(49, 140, 110, 0.14), transparent 30%),
+        radial-gradient(circle at top right, rgba(196, 141, 52, 0.14), transparent 26%),
+        linear-gradient(180deg, #eef4f2 0%, #f6f8f7 100%);
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+    }
+
+    .shell {
+      width: min(1560px, calc(100vw - 28px));
+      min-height: calc(100vh - 28px);
+      margin: 14px auto;
+      border: 1px solid rgba(182, 201, 193, 0.95);
+      border-radius: 30px;
+      background: rgba(250, 252, 251, 0.78);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      backdrop-filter: blur(12px);
+      display: grid;
+      grid-template-rows: auto auto minmax(460px, 1fr) 250px;
+    }
+
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 16px 18px;
+      border-bottom: 1px solid rgba(191, 208, 200, 0.85);
+      background: rgba(255, 255, 255, 0.55);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 38px;
+      padding: 0 14px;
+      border: 1px solid rgba(191, 208, 200, 0.9);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.92);
+      font-size: 13px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .pill strong { color: var(--text); }
+    .pill.primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: transparent;
+      font-weight: 700;
+    }
+    .pill.ok { background: #eefaf4; color: #22684a; }
+    .pill.warn { background: #fff6ea; color: #955c18; }
+    .pill.ghost { background: #f4f8f6; }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: currentColor;
+      opacity: 0.85;
+      flex: 0 0 auto;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(360px, 0.9fr);
+      gap: 16px;
+      padding: 18px;
+      border-bottom: 1px solid rgba(191, 208, 200, 0.85);
+      background: linear-gradient(180deg, rgba(253, 255, 254, 0.96), rgba(244, 248, 246, 0.94));
+    }
+
+    .hero-card {
+      min-width: 0;
+      padding: 20px 22px;
+      border: 1px solid rgba(191, 208, 200, 0.92);
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: 0 10px 28px rgba(25, 54, 43, 0.05);
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .hero-title {
+      margin: 0 0 10px;
+      font-size: 28px;
+      line-height: 1.25;
+      font-weight: 800;
+    }
+
+    .hero-copy {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.72;
+      color: var(--muted);
+    }
+
+    .hero-copy strong {
+      color: var(--accent);
+      font-weight: 800;
+    }
+
+    .hero-points {
+      margin-top: 14px;
+      display: grid;
+      gap: 9px;
+    }
+
+    .hero-point {
+      display: grid;
+      grid-template-columns: 10px 1fr;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .hero-point::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      margin-top: 5px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, var(--accent), var(--accent-2));
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      align-content: start;
+    }
+
+    .metric {
+      padding: 14px;
+      border: 1px solid rgba(191, 208, 200, 0.92);
+      border-radius: 16px;
+      background: linear-gradient(180deg, #fcfefd, #f6faf8);
+    }
+
+    .metric-k {
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .metric-v {
+      font-size: 24px;
+      line-height: 1.2;
+      font-weight: 800;
+    }
+
+    .metric-s {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .workspace {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(840px, 1fr) 400px;
+    }
+
+    .graph-pane {
+      position: relative;
+      min-height: 0;
+      border-right: 1px solid rgba(191, 208, 200, 0.85);
+      background:
+        radial-gradient(circle at 1px 1px, rgba(73, 100, 88, 0.08) 1px, transparent 0) 0 0 / 28px 28px,
+        linear-gradient(180deg, rgba(252, 254, 253, 0.94), rgba(245, 249, 247, 0.98));
+      overflow: hidden;
+    }
+
+    .toolbar {
+      position: absolute;
+      top: 16px;
+      left: 18px;
+      z-index: 3;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      max-width: calc(100% - 36px);
+      padding: 8px;
+      border: 1px solid rgba(191, 208, 200, 0.92);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: 0 10px 30px rgba(25, 54, 43, 0.08);
+      backdrop-filter: blur(8px);
+    }
+
+    .seg {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 10px 13px;
+      border-radius: 12px;
+      color: var(--muted);
+      font-size: 13px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .seg.active {
+      background: #e8f3ee;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .legend {
+      position: absolute;
+      top: 78px;
+      left: 18px;
+      z-index: 2;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      max-width: calc(100% - 36px);
+    }
+
+    .legend-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border: 1px solid rgba(191, 208, 200, 0.92);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.88);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    svg {
+      width: 100%;
+      height: 100%;
+      min-height: 520px;
+      display: block;
+    }
+
+    .edge {
+      stroke: #9aa89f;
+      stroke-width: 2.1;
+      fill: none;
+      opacity: 0.82;
+      marker-end: url(#arrow);
+    }
+
+    .edge.soft { opacity: 0.46; }
+    .edge.warning {
+      stroke: var(--impact);
+      stroke-dasharray: 5 7;
+    }
+
+    .node {
+      cursor: pointer;
+      transition: transform 0.16s ease;
+    }
+
+    .node:hover { transform: translateY(-1px); }
+
+    .node-box {
+      stroke-width: 1.6;
+      filter: drop-shadow(0 10px 18px rgba(27, 49, 40, 0.08));
+    }
+
+    .node.selected .node-box {
+      stroke-width: 2.8;
+      stroke: #0f172a;
+    }
+
+    .node-title {
+      font-size: 15px;
+      font-weight: 800;
+      dominant-baseline: middle;
+    }
+
+    .node-sub {
+      font-size: 12px;
+      dominant-baseline: middle;
+    }
+
+    .feature-node .node-box {
+      fill: #f0faf7;
+      stroke: #5ba28d;
+    }
+
+    .feature-node .node-title,
+    .feature-node .node-sub {
+      fill: #12483b;
+    }
+
+    .feature-node.hit .node-box {
+      fill: var(--feature);
+      stroke: #0d5646;
+    }
+
+    .feature-node.hit .node-title,
+    .feature-node.hit .node-sub {
+      fill: #fff;
+    }
+
+    .code-node .node-box {
+      fill: #eef4fb;
+      stroke: #6891bb;
+    }
+
+    .code-node .node-title,
+    .code-node .node-sub {
+      fill: #183b62;
+    }
+
+    .code-node.aggregate .node-box {
+      fill: #f4f7fb;
+      stroke: #9aaec2;
+      stroke-dasharray: 4 4;
+    }
+
+    .impact-node .node-box {
+      fill: #fff7ec;
+      stroke: #d39b4f;
+      stroke-dasharray: 5 5;
+    }
+
+    .impact-node .node-title,
+    .impact-node .node-sub {
+      fill: #855113;
+    }
+
+    .evidence-node .node-box {
+      fill: #f7f8fa;
+      stroke: #aab3bb;
+    }
+
+    .evidence-node .node-title,
+    .evidence-node .node-sub {
+      fill: #4a5964;
+    }
+
+    .hidden { display: none !important; }
+
+    .sidebar {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      background: linear-gradient(180deg, #fbfdfc, #f5f9f7);
+      min-height: 0;
+    }
+
+    .side-head {
+      padding: 22px 22px 16px;
+      border-bottom: 1px solid rgba(191, 208, 200, 0.85);
+    }
+
+    .side-title {
+      margin: 0 0 8px;
+      font-size: 22px;
+      line-height: 1.25;
+    }
+
+    .side-meta {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .side-path {
+      display: grid;
+      gap: 4px;
+      padding: 14px 22px;
+      border-bottom: 1px solid rgba(191, 208, 200, 0.85);
+      background: rgba(240, 246, 242, 0.88);
+      font-size: 14px;
+    }
+
+    .side-scroll {
+      min-height: 0;
+      overflow: auto;
+    }
+
+    .section {
+      padding: 16px 22px 18px;
+      border-bottom: 1px solid rgba(191, 208, 200, 0.82);
+    }
+
+    .section h4 {
+      margin: 0 0 12px;
+      font-size: 15px;
+    }
+
+    .list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .item {
+      display: grid;
+      grid-template-columns: 16px 1fr;
+      gap: 10px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .icon {
+      width: 16px;
+      height: 16px;
+      margin-top: 2px;
+      border-radius: 999px;
+    }
+
+    .item.ok .icon { background: var(--ok); }
+    .item.warn .icon { background: var(--warn); }
+    .item.gap .icon { background: var(--gap); }
+    .item.neutral .icon { background: #8aa099; }
+
+    .bottom {
+      display: grid;
+      grid-template-rows: 54px 1fr;
+      border-top: 1px solid rgba(191, 208, 200, 0.85);
+      background: rgba(255, 255, 255, 0.82);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      padding: 0 18px;
+      align-items: end;
+      border-bottom: 1px solid rgba(191, 208, 200, 0.85);
+      background: rgba(248, 251, 250, 0.9);
+    }
+
+    .tab {
+      display: inline-flex;
+      align-items: center;
+      height: 100%;
+      padding: 0 12px;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .tab.active {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .panel-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      min-height: 0;
+    }
+
+    .panel-card {
+      padding: 18px;
+      overflow: auto;
+      min-height: 0;
+    }
+
+    .panel-card + .panel-card {
+      border-left: 1px solid rgba(191, 208, 200, 0.85);
+    }
+
+    .panel-title {
+      margin-bottom: 12px;
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .case-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .case-row {
+      display: grid;
+      grid-template-columns: 18px 1fr auto;
+      gap: 10px;
+      align-items: start;
+      padding: 11px 12px;
+      border: 1px solid rgba(191, 208, 200, 0.92);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.92);
+    }
+
+    .status {
+      width: 18px;
+      height: 18px;
+      margin-top: 2px;
+      border-radius: 999px;
+    }
+
+    .status.pass { background: var(--ok); }
+    .status.warn { background: var(--warn); }
+    .status.gap { background: var(--gap); }
+    .status.neutral { background: #8aa099; }
+
+    .pill-badge {
+      display: inline-flex;
+      align-items: center;
+      height: 24px;
+      padding: 0 10px;
+      border: 1px solid rgba(191, 208, 200, 0.9);
+      border-radius: 999px;
+      background: #f4f8f6;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 1300px) {
+      .shell {
+        min-height: auto;
+        grid-template-rows: auto auto auto 280px;
+      }
+      .hero { grid-template-columns: 1fr; }
+      .workspace { grid-template-columns: 1fr; }
+      .sidebar { border-top: 1px solid rgba(191, 208, 200, 0.85); }
+      .toolbar, .legend { position: static; margin: 16px 18px 0; }
+      .panel-grid { grid-template-columns: 1fr; }
+      .panel-card + .panel-card {
+        border-left: 0;
+        border-top: 1px solid rgba(191, 208, 200, 0.85);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar">
+      <div class="pill primary">Review Workspace</div>
+      <div class="pill"><span class="dot" style="color:var(--feature)"></span><strong>2</strong> 个直接命中入口容器</div>
+      <div class="pill"><span class="dot" style="color:var(--code)"></span><strong>4</strong> 个代码节点</div>
+      <div class="pill ok"><span class="dot" style="color:var(--ok)"></span>主流程已验证</div>
+      <div class="pill warn"><span class="dot" style="color:var(--impact)"></span>1 个影响面入口待复查</div>
+      <div class="pill ghost" style="margin-left:auto">只看未验证</div>
+      <div class="pill ghost">显示聚合原因</div>
+    </div>
+
+    <div class="hero">
+      <section class="hero-card">
+        <div class="eyebrow"><span class="dot" style="color:var(--accent)"></span>Agent Summary</div>
+        <h1 class="hero-title">这次改动主要落在 <strong>OrdersApi</strong> 与 <strong>PaymentRetryConsumer</strong> 两个入口容器。</h1>
+        <p class="hero-copy">
+          当前图把 <strong>Feature</strong> 定义为入口宿主容器，而不是业务 feature。这样 reviewer 先看
+          “哪些入口被打到了”，再看其下的 <strong>Code 聚合节点</strong> 和验证证据。默认主图只展示直接命中入口；
+          只有切到 <strong>Impact Map</strong>，才会展开共享依赖传播到的其他入口。
+        </p>
+        <div class="hero-points">
+          <div class="hero-point">建议先看 OrdersApi 下的 <strong>create_order()</strong>，它代表本次主控制流变化。</div>
+          <div class="hero-point">PaymentRetryConsumer 因命中 callable 过多，当前按 <strong>模块级折叠</strong> 展示。</div>
+          <div class="hero-point">影响面入口只在 Impact Map 可见，避免 reviewer 在默认视图中失焦。</div>
+        </div>
+      </section>
+
+      <section class="hero-card">
+        <div class="eyebrow"><span class="dot" style="color:var(--impact)"></span>Overall</div>
+        <div class="metrics">
+          <div class="metric">
+            <div class="metric-k">视图模型</div>
+            <div class="metric-v">入口宿主</div>
+            <div class="metric-s">Feature 节点按 interface / server / handler 聚合。</div>
+          </div>
+          <div class="metric">
+            <div class="metric-k">Code 粒度</div>
+            <div class="metric-v">混合聚合</div>
+            <div class="metric-s">函数优先，超过阈值回退到类或模块。</div>
+          </div>
+          <div class="metric">
+            <div class="metric-k">风险</div>
+            <div class="metric-v" style="color:var(--impact)">中风险</div>
+            <div class="metric-s">默认参数与共享状态依赖仍需补证。</div>
+          </div>
+          <div class="metric">
+            <div class="metric-k">验证缺口</div>
+            <div class="metric-v">2 处</div>
+            <div class="metric-s">缺省参数回放、状态读取回归检查。</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="workspace">
+      <div class="graph-pane">
+        <div class="toolbar">
+          <div class="seg active" data-layer="feature">Feature Map</div>
+          <div class="seg" data-layer="impact">Impact Map</div>
+          <div class="seg" id="toggleEvidence">Evidence</div>
+        </div>
+
+        <div class="legend">
+          <div class="legend-tag"><span class="dot" style="color:var(--feature)"></span>直接命中入口容器</div>
+          <div class="legend-tag"><span class="dot" style="color:var(--code)"></span>代码落点</div>
+          <div class="legend-tag"><span class="dot" style="color:var(--impact)"></span>Impact Map 才展开</div>
+          <div class="legend-tag"><span class="dot" style="color:var(--evidence)"></span>验证证据</div>
+        </div>
+
+        <svg viewBox="0 0 980 560" aria-label="review graph">
+          <g transform="translate(0, 80)">
+            <defs>
+              <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                <path d="M0,0 L10,5 L0,10 z" fill="#8fa29a"></path>
+              </marker>
+            </defs>
+
+            <path class="edge" d="M 250 108 C 305 130, 340 170, 365 210" />
+            <path class="edge" d="M 430 108 C 500 130, 550 170, 592 214" />
+            <path class="edge soft" d="M 395 244 C 330 288, 280 334, 248 390" />
+            <path class="edge soft" d="M 602 248 C 665 286, 735 336, 776 390" />
+            <path class="edge" d="M 488 244 C 488 290, 488 330, 488 388" />
+            <path class="edge warning impact-edge hidden" d="M 640 244 C 720 240, 760 222, 824 190" />
+
+            <g class="node feature-node hit selected" data-node="feature-orders-api">
+              <rect class="node-box" x="118" y="58" width="240" height="72" rx="16"></rect>
+              <text class="node-title" x="148" y="87">OrdersApi</text>
+              <text class="node-sub" x="148" y="111">Feature · 2 routes · api_container</text>
+            </g>
+
+            <g class="node feature-node hit" data-node="feature-payment-retry-consumer">
+              <rect class="node-box" x="382" y="58" width="280" height="72" rx="16"></rect>
+              <text class="node-title" x="412" y="87">PaymentRetryConsumer</text>
+              <text class="node-sub" x="412" y="111">Feature · 1 consumer · consumer_container</text>
+            </g>
+
+            <g class="node code-node" data-node="code-create-order">
+              <rect class="node-box" x="300" y="196" width="220" height="70" rx="16"></rect>
+              <text class="node-title" x="330" y="224">create_order()</text>
+              <text class="node-sub" x="330" y="248">Code · function</text>
+            </g>
+
+            <g class="node code-node aggregate" data-node="code-retry-policy-module">
+              <rect class="node-box" x="538" y="198" width="250" height="68" rx="16"></rect>
+              <text class="node-title" x="568" y="225">retry_policy module</text>
+              <text class="node-sub" x="568" y="248">Code · module · callable 过多已折叠</text>
+            </g>
+
+            <g class="node evidence-node" data-node="evidence-orders">
+              <rect class="node-box" x="156" y="384" width="220" height="52" rx="14"></rect>
+              <text class="node-title" x="186" y="410">订单入口验证</text>
+              <text class="node-sub" x="186" y="430">Evidence · partially verified</text>
+            </g>
+
+            <g class="node evidence-node" data-node="evidence-retry">
+              <rect class="node-box" x="406" y="384" width="198" height="52" rx="14"></rect>
+              <text class="node-title" x="436" y="410">消费重试验证</text>
+              <text class="node-sub" x="436" y="430">Evidence · verified</text>
+            </g>
+
+            <g class="node evidence-node" data-node="evidence-gaps">
+              <rect class="node-box" x="664" y="384" width="212" height="52" rx="14"></rect>
+              <text class="node-title" x="694" y="410">未验证缺口</text>
+              <text class="node-sub" x="694" y="430">Evidence · gap group</text>
+            </g>
+
+            <g class="node impact-node impact-only hidden" data-node="impact-merchant-status-api">
+              <rect class="node-box" x="760" y="146" width="178" height="64" rx="16"></rect>
+              <text class="node-title" x="790" y="172">MerchantStatusApi</text>
+              <text class="node-sub" x="790" y="194">Impact · indirectly impacted</text>
+            </g>
+          </g>
+        </svg>
+      </div>
+
+      <aside class="sidebar">
+        <div class="side-head">
+          <h2 class="side-title" id="sideTitle">OrdersApi</h2>
+          <div class="side-meta" id="sideMeta">
+            <span class="dot" style="color:var(--feature)"></span>
+            <span>Feature · api_container · directly_changed</span>
+          </div>
+        </div>
+
+        <div class="side-path">
+          <div id="sidePathPrimary">backend/app/api/orders.py</div>
+          <div class="muted" id="sidePathSecondary">POST /orders · GET /orders/{id}</div>
+        </div>
+
+        <div class="side-scroll">
+          <section class="section">
+            <h4>本次变更</h4>
+            <div class="list" id="summaryList"></div>
+          </section>
+          <section class="section">
+            <h4>Warnings</h4>
+            <div class="list" id="warningList"></div>
+          </section>
+          <section class="section">
+            <h4>测试覆盖</h4>
+            <div class="list" id="coverageList"></div>
+          </section>
+          <section class="section" style="border-bottom:0">
+            <h4>回归影响</h4>
+            <div class="list" id="impactList"></div>
+          </section>
+        </div>
+      </aside>
+    </div>
+
+    <div class="bottom">
+      <div class="tabs">
+        <div class="tab active" data-tab="coverage">测试覆盖</div>
+        <div class="tab" data-tab="impact">回归影响</div>
+      </div>
+
+      <div class="panel-grid" id="panel-coverage">
+        <div class="panel-card">
+          <div class="panel-title">存量 Case</div>
+          <div class="case-list" id="existingCases"></div>
+        </div>
+        <div class="panel-card">
+          <div class="panel-title">建议补充 Case</div>
+          <div class="case-list" id="suggestedCases"></div>
+        </div>
+      </div>
+
+      <div class="panel-grid hidden" id="panel-impact">
+        <div class="panel-card">
+          <div class="panel-title">受影响入口容器</div>
+          <div class="case-list" id="impactedFeatures"></div>
+        </div>
+        <div class="panel-card">
+          <div class="panel-title">风险判断</div>
+          <div class="case-list" id="assessments"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const nodeData = {
+      "feature-orders-api": {
+        title: "OrdersApi",
+        meta: "Feature · api_container · directly_changed",
+        path1: "backend/app/api/orders.py",
+        path2: "POST /orders · GET /orders/{id}",
+        summary: [
+          ["ok", "OrdersApi 作为入口宿主容器被本次变更直接命中。"],
+          ["ok", "其下代码落点保持函数级展示，因为 callable 数量未超过阈值。"]
+        ],
+        warnings: [
+          ["warn", "默认参数缺省场景还没有补齐验证。"]
+        ],
+        coverage: [
+          ["ok", "主流程已有验证证据。"],
+          ["gap", "缺少 no-options 回放用例。"]
+        ],
+        impact: [
+          ["neutral", "Impact Map 中可展开共享状态读取的外溢入口。"]
+        ],
+        bottom: {
+          existing: [
+            { status: "pass", name: "test_order_retry_mode", desc: "覆盖基础重试语义", badge: "存量" }
+          ],
+          suggested: [
+            { status: "gap", name: "test_order_create_no_options", desc: "补齐 options 缺省场景", badge: "待新增" }
+          ],
+          impacted: [
+            { status: "warn", name: "MerchantStatusApi", desc: "共享状态读取依赖", badge: "Impact Map" }
+          ],
+          assessments: [
+            { status: "warn", name: "回归证据不足", desc: "当前只能证明主流程可运行，尚不能证明旧调用方兼容。", badge: "需补验证" }
+          ]
+        }
+      },
+      "feature-payment-retry-consumer": {
+        title: "PaymentRetryConsumer",
+        meta: "Feature · consumer_container · directly_changed",
+        path1: "backend/app/consumers/payment_retry.py",
+        path2: "payment_timeout.consume(event)",
+        summary: [
+          ["ok", "该入口容器下命中多个 callable，因此当前按模块级聚合。"]
+        ],
+        warnings: [
+          ["neutral", "聚合是为了避免图在默认视图中过碎。"]
+        ],
+        coverage: [
+          ["ok", "消费重试主路径已有验证证据。"]
+        ],
+        impact: [
+          ["neutral", "默认视图不展开受影响入口。"]
+        ],
+        bottom: {
+          existing: [
+            { status: "pass", name: "test_retry_consumer_happy_path", desc: "验证正常消费流", badge: "存量" }
+          ],
+          suggested: [
+            { status: "gap", name: "test_retry_consumer_duplicate_guard", desc: "建议补重复消息保护用例", badge: "待补" }
+          ],
+          impacted: [
+            { status: "neutral", name: "暂无默认显示", desc: "切到 Impact Map 后再展示。", badge: "延迟展开" }
+          ],
+          assessments: [
+            { status: "pass", name: "消费主路径稳定", desc: "当前证据集中且风险可控。", badge: "已有证据" }
+          ]
+        }
+      },
+      "code-create-order": {
+        title: "create_order()",
+        meta: "Code · function · directly_changed",
+        path1: "backend/app/services/order_service.py",
+        path2: "create_order(payload, options=None)",
+        summary: [
+          ["ok", "控制流变化落在该函数，适合函数级展示。"]
+        ],
+        warnings: [
+          ["warn", "默认参数语义变化需要补充回放验证。"]
+        ],
+        coverage: [
+          ["gap", "还缺少 options 缺省路径回归用例。"]
+        ],
+        impact: [
+          ["warn", "共享状态读取入口可能间接受影响。"]
+        ],
+        bottom: {
+          existing: [
+            { status: "pass", name: "test_create_order_success", desc: "正常流验证", badge: "存量" }
+          ],
+          suggested: [
+            { status: "gap", name: "test_create_order_no_options", desc: "补齐缺省参数输入", badge: "待新增" }
+          ],
+          impacted: [
+            { status: "warn", name: "MerchantStatusApi", desc: "共享查询语义", badge: "间接受影响" }
+          ],
+          assessments: [
+            { status: "warn", name: "影响可能外溢", desc: "需在 Impact Map 中核对共享依赖。", badge: "建议复查" }
+          ]
+        }
+      },
+      "code-retry-policy-module": {
+        title: "retry_policy module",
+        meta: "Code · module · aggregate",
+        path1: "backend/app/services/retry_policy.py",
+        path2: "callable >= 5，已回退到模块级",
+        summary: [
+          ["ok", "命中 callable 过多，因此统一回退到模块节点。"]
+        ],
+        warnings: [
+          ["neutral", "当前没有保留关键函数特例，保证视觉稳定。"]
+        ],
+        coverage: [
+          ["ok", "主消费路径已验证。"]
+        ],
+        impact: [
+          ["neutral", "默认不展开其他入口影响。"]
+        ],
+        bottom: {
+          existing: [
+            { status: "pass", name: "test_retry_policy_module", desc: "聚合模块已有 smoke coverage", badge: "存量" }
+          ],
+          suggested: [
+            { status: "gap", name: "test_retry_policy_backoff_edges", desc: "建议补边界条件", badge: "待补" }
+          ],
+          impacted: [
+            { status: "neutral", name: "暂无默认展示", desc: "Impact Map 打开后再显示。", badge: "延迟展开" }
+          ],
+          assessments: [
+            { status: "pass", name: "聚合策略稳定", desc: "避免函数级节点过碎导致图失焦。", badge: "设计约束" }
+          ]
+        }
+      },
+      "evidence-orders": {
+        title: "订单入口验证",
+        meta: "Evidence · verification_group · partially_verified",
+        path1: "verification group",
+        path2: "verified_changed_paths + missing_tests",
+        summary: [
+          ["ok", "证据分组不按单测节点散开，先按验证主题聚合。"]
+        ],
+        warnings: [
+          ["gap", "缺少 no-options 场景。"]
+        ],
+        coverage: [
+          ["ok", "已有主流程证据。"]
+        ],
+        impact: [
+          ["neutral", "该节点不直接引入 impact 传播。"]
+        ],
+        bottom: {
+          existing: [
+            { status: "pass", name: "verified_changed_paths", desc: "主路径已命中验证", badge: "证据" }
+          ],
+          suggested: [
+            { status: "gap", name: "missing_tests_for_changed_paths", desc: "仍存在未覆盖路径", badge: "缺口" }
+          ],
+          impacted: [],
+          assessments: [
+            { status: "warn", name: "部分验证", desc: "当前只能给出 partially verified 结论。", badge: "证据状态" }
+          ]
+        }
+      },
+      "impact-merchant-status-api": {
+        title: "MerchantStatusApi",
+        meta: "Impact · api_container · indirectly_impacted",
+        path1: "backend/app/api/merchant_status.py",
+        path2: "仅在 Impact Map 展示",
+        summary: [
+          ["warn", "该入口没有被直接修改，但共享状态依赖可能受影响。"]
+        ],
+        warnings: [
+          ["warn", "默认主图不展示，避免 reviewer 一开始失焦。"]
+        ],
+        coverage: [
+          ["gap", "缺少针对状态读取的回归证明。"]
+        ],
+        impact: [
+          ["warn", "这是典型的 indirectly impacted feature。"]
+        ],
+        bottom: {
+          existing: [
+            { status: "gap", name: "test_merchant_status_after_retry", desc: "当前不存在", badge: "缺失" }
+          ],
+          suggested: [
+            { status: "gap", name: "integration_status_consistency", desc: "建议补共享状态一致性验证", badge: "待新增" }
+          ],
+          impacted: [
+            { status: "warn", name: "MerchantStatusApi", desc: "来自共享依赖传播", badge: "impact only" }
+          ],
+          assessments: [
+            { status: "warn", name: "间接受影响", desc: "只在 Impact Map 中出现，供 reviewer 二次展开。", badge: "延迟显示" }
+          ]
+        }
+      }
+    };
+
+    const nodes = document.querySelectorAll(".node");
+    const sideTitle = document.getElementById("sideTitle");
+    const sideMeta = document.getElementById("sideMeta");
+    const sidePathPrimary = document.getElementById("sidePathPrimary");
+    const sidePathSecondary = document.getElementById("sidePathSecondary");
+    const summaryList = document.getElementById("summaryList");
+    const warningList = document.getElementById("warningList");
+    const coverageList = document.getElementById("coverageList");
+    const impactList = document.getElementById("impactList");
+    const existingCases = document.getElementById("existingCases");
+    const suggestedCases = document.getElementById("suggestedCases");
+    const impactedFeatures = document.getElementById("impactedFeatures");
+    const assessments = document.getElementById("assessments");
+
+    function renderItem([type, text]) {
+      return `<div class="item ${type}"><div class="icon"></div><div>${text}</div></div>`;
+    }
+
+    function renderCase(row) {
+      return `
+        <div class="case-row">
+          <div class="status ${row.status}"></div>
+          <div>
+            <div style="font-weight:700; margin-bottom:2px;">${row.name}</div>
+            <div class="muted">${row.desc}</div>
+          </div>
+          <div class="pill-badge">${row.badge || ""}</div>
+        </div>
+      `;
+    }
+
+    function fillPanel(key) {
+      const data = nodeData[key];
+      sideTitle.textContent = data.title;
+      sideMeta.innerHTML = `<span class="dot" style="color:var(--feature)"></span><span>${data.meta}</span>`;
+      sidePathPrimary.textContent = data.path1;
+      sidePathSecondary.textContent = data.path2;
+      summaryList.innerHTML = data.summary.map(renderItem).join("");
+      warningList.innerHTML = data.warnings.map(renderItem).join("");
+      coverageList.innerHTML = data.coverage.map(renderItem).join("");
+      impactList.innerHTML = data.impact.map(renderItem).join("");
+      existingCases.innerHTML = data.bottom.existing.map(renderCase).join("");
+      suggestedCases.innerHTML = data.bottom.suggested.map(renderCase).join("");
+      impactedFeatures.innerHTML = (data.bottom.impacted.length ? data.bottom.impacted : [{ status: "neutral", name: "暂无", desc: "当前节点没有额外影响面信息。", badge: "空" }]).map(renderCase).join("");
+      assessments.innerHTML = data.bottom.assessments.map(renderCase).join("");
+    }
+
+    nodes.forEach(node => {
+      node.addEventListener("click", () => {
+        nodes.forEach(item => item.classList.remove("selected"));
+        node.classList.add("selected");
+        fillPanel(node.dataset.node);
+      });
+    });
+
+    const segs = document.querySelectorAll(".seg[data-layer]");
+    const impactOnlyNodes = document.querySelectorAll(".impact-only");
+    const impactEdges = document.querySelectorAll(".impact-edge");
+    const evidenceNodes = document.querySelectorAll(".evidence-node");
+    const evidenceToggle = document.getElementById("toggleEvidence");
+    let evidenceVisible = true;
+
+    function applyLayer(layer) {
+      segs.forEach(seg => seg.classList.toggle("active", seg.dataset.layer === layer));
+      impactOnlyNodes.forEach(node => node.classList.toggle("hidden", layer !== "impact"));
+      impactEdges.forEach(edge => edge.classList.toggle("hidden", layer !== "impact"));
+    }
+
+    segs.forEach(seg => {
+      seg.addEventListener("click", () => applyLayer(seg.dataset.layer));
+    });
+
+    evidenceToggle.addEventListener("click", () => {
+      evidenceVisible = !evidenceVisible;
+      evidenceToggle.classList.toggle("active", evidenceVisible);
+      evidenceNodes.forEach(node => node.classList.toggle("hidden", !evidenceVisible));
+    });
+
+    const tabs = document.querySelectorAll(".tab");
+    const coveragePanel = document.getElementById("panel-coverage");
+    const impactPanel = document.getElementById("panel-impact");
+    tabs.forEach(tab => {
+      tab.addEventListener("click", () => {
+        tabs.forEach(item => item.classList.remove("active"));
+        tab.classList.add("active");
+        const isCoverage = tab.dataset.tab === "coverage";
+        coveragePanel.classList.toggle("hidden", !isCoverage);
+        impactPanel.classList.toggle("hidden", isCoverage);
+      });
+    });
+
+    fillPanel("feature-orders-api");
+  </script>
+</body>
+</html>

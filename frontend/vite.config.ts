@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-export default defineConfig({
+const config = {
   plugins: [react()],
   server: {
     port: 5173,
@@ -10,4 +10,10 @@ export default defineConfig({
       '/health': 'http://localhost:8088',
     },
   },
-})
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+  },
+} as any
+
+export default defineConfig(config)

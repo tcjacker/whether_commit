@@ -108,14 +108,14 @@ class AgentReasoningService:
 
         if not changed_files:
             return {
-                "technical_change_summary": "No pending change facts were provided.",
+                "technical_change_summary": "未提供待分析的变更事实。",
                 "change_types": [],
                 "risk_factors": [],
                 "review_recommendations": [],
-                "why_impacted": "No changed files were present in the normalized input.",
+                "why_impacted": "标准化输入中不存在变更文件。",
                 "confidence": "low",
-                "unknowns": ["No changed files were present in the normalized input."],
-                "validation_gaps": missing_tests or ["No change surface available for verification mapping."],
+                "unknowns": ["标准化输入中不存在变更文件。"],
+                "validation_gaps": missing_tests or ["缺少可用于验证映射的变更面信息。"],
             }
 
         change_types: List[str] = []
@@ -132,21 +132,21 @@ class AgentReasoningService:
 
         risk_factors: List[str] = []
         if not affected_tests:
-            risk_factors.append("No report-backed verification was linked to the changed paths.")
+            risk_factors.append("变更路径未关联到带报告的验证证据。")
         if len(changed_modules) > 3:
-            risk_factors.append("Broad module surface detected in the working tree diff.")
+            risk_factors.append("工作区差异涉及的模块范围较广。")
         if not graph_data.get("dependencies"):
-            risk_factors.append("No dependency edges were available to expand transitive impact.")
+            risk_factors.append("缺少依赖边，无法充分展开传递影响。")
 
         why_impacted_parts: List[str] = []
         if changed_symbols:
-            why_impacted_parts.append(f"Changed symbols: {', '.join(changed_symbols[:5])}")
+            why_impacted_parts.append(f"变更符号：{', '.join(changed_symbols[:5])}")
         if changed_routes:
-            why_impacted_parts.append(f"Changed routes: {', '.join(changed_routes[:3])}")
+            why_impacted_parts.append(f"变更路由：{', '.join(changed_routes[:3])}")
         if changed_modules:
-            why_impacted_parts.append(f"Changed modules: {', '.join(changed_modules[:5])}")
+            why_impacted_parts.append(f"变更模块：{', '.join(changed_modules[:5])}")
         if not why_impacted_parts:
-            why_impacted_parts.append("Impact is inferred from file-level change metadata only.")
+            why_impacted_parts.append("影响范围仅依据文件级变更元数据推断。")
 
         confidence = "high" if affected_tests and graph_data.get("dependencies") else "medium"
         if not affected_tests or not graph_data.get("dependencies"):
@@ -154,28 +154,28 @@ class AgentReasoningService:
 
         unknowns: List[str] = []
         if not graph_data.get("dependencies"):
-            unknowns.append("Dependency graph was incomplete, so transitive impact is conservative.")
+            unknowns.append("依赖图不完整，因此传递影响只能保守推断。")
         if not affected_tests:
-            unknowns.append("Verification evidence is weak or missing for the changed surface.")
+            unknowns.append("变更面的验证证据较弱或缺失。")
 
         # Infer a brief change_intent from available facts
         intent_parts: List[str] = []
         if changed_routes:
-            intent_parts.append(f"modifies {len(changed_routes)} API route(s)")
+            intent_parts.append(f"修改 {len(changed_routes)} 个 API 路由")
         if change_data.get("changed_schemas"):
-            intent_parts.append("updates data contracts")
+            intent_parts.append("更新数据契约")
         if change_data.get("changed_jobs"):
-            intent_parts.append("changes background jobs")
+            intent_parts.append("调整后台任务")
         if changed_symbols:
-            intent_parts.append(f"touches {len(changed_symbols)} symbol(s)")
+            intent_parts.append(f"涉及 {len(changed_symbols)} 个符号")
         if not intent_parts:
-            intent_parts.append(f"modifies {len(changed_files)} file(s)")
-        change_intent = "Change " + "; ".join(intent_parts) + "."
+            intent_parts.append(f"修改 {len(changed_files)} 个文件")
+        change_intent = "本次变更" + "；".join(intent_parts) + "。"
 
         return {
             "technical_change_summary": (
-                f"{len(changed_files)} files changed; "
-                f"{len(changed_symbols)} symbols and {len(changed_routes)} routes were implicated."
+                f"共变更 {len(changed_files)} 个文件；"
+                f"涉及 {len(changed_symbols)} 个符号和 {len(changed_routes)} 条路由。"
             ),
             "change_types": change_types,
             "risk_factors": risk_factors,
@@ -184,7 +184,7 @@ class AgentReasoningService:
             "change_intent": change_intent,
             "confidence": confidence,
             "unknowns": unknowns,
-            "validation_gaps": missing_tests or (["No report-backed test evidence for the changed files."] if not affected_tests else []),
+            "validation_gaps": missing_tests or (["变更文件缺少带报告的测试证据。"] if not affected_tests else []),
         }
 
     def _merge_unique(self, base: List[str], additions: List[str]) -> List[str]:

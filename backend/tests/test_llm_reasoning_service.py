@@ -56,6 +56,7 @@ class ReasoningPromptBuilderTest(unittest.TestCase):
         constraints = prompt["constraints"]
         self.assertTrue(any("specific values" in item for item in constraints))
         self.assertTrue(any("field names" in item for item in constraints))
+        self.assertTrue(any("Simplified Chinese" in item for item in constraints))
 
 
 class LLMReasoningServiceTest(unittest.TestCase):
@@ -180,8 +181,8 @@ class AgentReasoningServiceTest(unittest.TestCase):
         )
 
         self.assertTrue(result["unknowns"])
-        self.assertTrue(any("graph" in item.lower() for item in result["unknowns"]))
-        self.assertTrue(any("verification" in item.lower() for item in result["unknowns"]))
+        self.assertTrue(any("依赖图" in item for item in result["unknowns"]))
+        self.assertTrue(any("验证证据" in item for item in result["unknowns"]))
         self.assertEqual(result["confidence"], "low")
 
 

@@ -28,12 +28,12 @@ export function useJobPoller(repoKey: string) {
             const overview = await fetchOverview(repoKey)
             setOverview(overview)
           } catch {
-            setLoadingState('error', 'Rebuild succeeded but could not load overview.')
+            setLoadingState('error', '重建成功，但加载总览失败。')
           }
         } else if (job.status === 'failed') {
           clearInterval(timerRef.current!)
           setActiveJob(null, null)
-          setLoadingState('error', job.message || 'Rebuild failed.')
+          setLoadingState('error', job.message || '重建失败。')
         }
       } catch (e) {
         if (e instanceof ApiError && e.status === 404) {

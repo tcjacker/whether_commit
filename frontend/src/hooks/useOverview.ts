@@ -3,13 +3,13 @@ import { fetchOverview, triggerRebuild } from '../api/overview'
 import { useOverviewStore } from '../store/useOverviewStore'
 import { ApiError } from '../api/client'
 
-export function useOverview(repoKey: string) {
+export function useOverview(repoKey: string, workspacePath?: string) {
   const { setOverview, setLoadingState, setActiveJob } = useOverviewStore()
 
   useEffect(() => {
     if (!repoKey) return
     setLoadingState('loading')
-    fetchOverview(repoKey)
+    fetchOverview(repoKey, undefined, workspacePath)
       .then(data => setOverview(data))
       .catch(e => {
         if (e instanceof ApiError && e.status === 404) {
@@ -18,18 +18,24 @@ export function useOverview(repoKey: string) {
           setLoadingState('error', e.message)
         }
       })
-  }, [repoKey])
+  }, [repoKey, workspacePath])
 
   const rebuild = async (workspacePath?: string) => {
+    const normalizedWorkspacePath = workspacePath?.trim()
+    if (!normalizedWorkspacePath) {
+      setLoadingState('error', '请先填写 workspace_path。')
+      return
+    }
+
     try {
       setLoadingState('rebuilding')
-      const { job_id } = await triggerRebuild({ repo_key: repoKey, workspace_path: workspacePath })
+      const { job_id } = await triggerRebuild({ repo_key: repoKey, workspace_path: normalizedWorkspacePath })
       setActiveJob(job_id, null)
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
-        setLoadingState('error', 'A rebuild is already running. Please wait.')
+        setLoadingState('error', '已有重建任务正在运行，请稍候。')
       } else {
-        setLoadingState('error', e instanceof Error ? e.message : 'Failed to start rebuild.')
+        setLoadingState('error', e instanceof Error ? e.message : '启动重建失败。')
       }
     }
   }

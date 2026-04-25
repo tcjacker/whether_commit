@@ -19,19 +19,34 @@ vi.mock('../../api/assessments', () => ({
       agent_sources: ['git_diff'],
       recommended_review_order: ['backend/app/main.py'],
     },
-    file_list: [{
-      file_id: 'cf_abc123',
-      path: 'backend/app/main.py',
-      old_path: null,
-      status: 'modified',
-      additions: 2,
-      deletions: 1,
-      risk_level: 'low',
-      coverage_status: 'unknown',
-      review_status: 'unreviewed',
-      agent_sources: ['git_diff'],
-      diff_fingerprint: 'sha256:abc',
-    }],
+    file_list: [
+      {
+        file_id: 'cf_abc123',
+        path: 'backend/app/main.py',
+        old_path: null,
+        status: 'modified',
+        additions: 2,
+        deletions: 1,
+        risk_level: 'low',
+        coverage_status: 'unknown',
+        review_status: 'unreviewed',
+        agent_sources: ['git_diff'],
+        diff_fingerprint: 'sha256:abc',
+      },
+      {
+        file_id: 'cf_test123',
+        path: 'backend/tests/test_main.py',
+        old_path: null,
+        status: 'modified',
+        additions: 4,
+        deletions: 0,
+        risk_level: 'low',
+        coverage_status: 'covered',
+        review_status: 'unreviewed',
+        agent_sources: ['git_diff'],
+        diff_fingerprint: 'sha256:test',
+      },
+    ],
     risk_signals_summary: [],
     agent_sources: ['git_diff'],
     review_progress: { total: 1, reviewed: 0, needs_follow_up: 0, needs_recheck: 0, unreviewed: 1 },
@@ -85,10 +100,11 @@ describe('AssessmentReviewPage', () => {
 
     expect(await screen.findByText('本次变更包含 1 个待审查文件。')).toBeInTheDocument()
     expect(screen.getAllByText('backend/app/main.py').length).toBeGreaterThan(0)
+    expect(screen.queryByText('backend/tests/test_main.py')).not.toBeInTheDocument()
     await waitFor(() => expect(screen.getByText(/new line/)).toBeInTheDocument())
     expect(screen.getByText('Verdict')).toBeInTheDocument()
     expect(screen.getByText('Why')).toBeInTheDocument()
     expect(screen.getByText('Impact')).toBeInTheDocument()
-    expect(screen.getByText('Tests')).toBeInTheDocument()
+    expect(screen.getAllByText('Tests').length).toBeGreaterThan(0)
   })
 })

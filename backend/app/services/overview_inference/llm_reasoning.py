@@ -219,21 +219,21 @@ class LLMReasoningService:
         review_recommendations = list(changed_files[:5])
         validation_gaps = list(unknowns)
         if not validation_gaps:
-            validation_gaps.append("No explicit verification evidence was available.")
+            validation_gaps.append("未提供明确的验证证据。")
 
         return {
-            "technical_change_summary": "Changed surface: " + ", ".join(summary_bits),
+            "technical_change_summary": "变更范围：" + "，".join(summary_bits),
             "change_types": change_types,
-            "risk_factors": list(unknowns) or ["Evidence is sparse, so reasoning remains conservative."],
+            "risk_factors": list(unknowns) or ["当前证据较少，因此推理结果保持保守。"],
             "review_recommendations": review_recommendations,
             "why_impacted": self._join_nonempty(
                 [
-                    f"Direct impacts: {', '.join(direct_impacts)}" if direct_impacts else "",
-                    f"Transitive impacts: {', '.join(transitive_impacts)}" if transitive_impacts else "",
-                    f"Symbols: {', '.join(changed_symbols)}" if changed_symbols else "",
+                    f"直接影响：{', '.join(direct_impacts)}" if direct_impacts else "",
+                    f"传递影响：{', '.join(transitive_impacts)}" if transitive_impacts else "",
+                    f"相关符号：{', '.join(changed_symbols)}" if changed_symbols else "",
                 ]
             )
-            or "Impact was inferred conservatively from normalized facts.",
+            or "影响范围仅基于标准化事实做保守推断。",
             "confidence": "low",
             "unknowns": unknowns,
             "validation_gaps": validation_gaps,

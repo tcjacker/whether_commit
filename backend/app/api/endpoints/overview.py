@@ -10,15 +10,16 @@ router = APIRouter()
 async def get_overview(
     repo_key: str, 
     workspace_snapshot_id: Optional[str] = None, 
+    workspace_path: Optional[str] = None,
     use_cache: bool = True
 ):
     """
     Load the complete overview data for the home page.
     """
     if workspace_snapshot_id:
-        overview_data = snapshot_store.get_overview(repo_key, workspace_snapshot_id)
+        overview_data = snapshot_store.get_overview(repo_key, workspace_snapshot_id, workspace_path=workspace_path)
     else:
-        overview_data = snapshot_store.get_latest_overview(repo_key)
+        overview_data = snapshot_store.get_latest_overview(repo_key, workspace_path=workspace_path)
 
     if not overview_data:
         raise HTTPException(status_code=404, detail="OVERVIEW_NOT_READY: Please trigger a rebuild first.")

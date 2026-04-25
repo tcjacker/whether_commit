@@ -10,11 +10,11 @@ router = APIRouter()
 
 
 @router.get("")
-async def get_verification_details(repo_key: str):
+async def get_verification_details(repo_key: str, workspace_path: str | None = None):
     """
     Get detailed verification status and signals.
     """
-    latest_overview = snapshot_store.get_latest_overview(repo_key)
+    latest_overview = snapshot_store.get_latest_overview(repo_key, workspace_path=workspace_path)
     if not latest_overview:
         raise HTTPException(status_code=404, detail="OVERVIEW_NOT_READY: Please trigger a rebuild first.")
 
@@ -23,7 +23,7 @@ async def get_verification_details(repo_key: str):
     if not snapshot_id:
         raise HTTPException(status_code=404, detail="VERIFICATION_UNAVAILABLE: Missing workspace snapshot pointer.")
 
-    verification_data = snapshot_store.get_verification(repo_key, snapshot_id)
+    verification_data = snapshot_store.get_verification(repo_key, snapshot_id, workspace_path=workspace_path)
     if not verification_data:
         raise HTTPException(
             status_code=404,

@@ -1,4 +1,5 @@
 .bar {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -17,6 +18,30 @@
 .bar p {
   margin: 0;
   color: #4b5563;
+}
+
+.nav {
+  display: flex;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.nav a {
+  padding: 5px 8px;
+  border-radius: 6px;
+  color: #4b5563;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.nav a:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.active {
+  background: #111827;
+  color: #ffffff !important;
 }
 
 .metrics {

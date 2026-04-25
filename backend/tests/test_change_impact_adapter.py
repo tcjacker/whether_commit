@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from pathlib import Path
 from textwrap import dedent
 
 from app.services.change_impact.adapter import ChangeImpactAdapter
@@ -132,6 +133,128 @@ class ChangeImpactAdapterTest(unittest.TestCase):
         self.assertEqual(result["direct_impacts"][0]["entity_id"], "mod_app")
         self.assertTrue(all("entity_id" in item and "reason" in item for item in result["impact_reasons"]))
         self.assertEqual(result["why_impacted"], result["impact_reasons"])
+
+    def test_generate_change_analysis_includes_file_diff_stats(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            os.mkdir(os.path.join(tmp_dir, ".git"))
+            adapter = ChangeImpactAdapter(workspace_path=tmp_dir)
+            adapter._git_status_lines = lambda: [" M app/main.py"]
+            adapter._load_graph_snapshot = lambda: {"modules": [], "dependencies": []}
+            adapter._extract_changed_python_facts = lambda _file_path, _status: {
+                "symbols": [],
+                "functions": [],
+                "classes": [],
+                "routes": [],
+                "changed_schemas": [],
+                "changed_jobs": [],
+                "affected_data_objects": [],
+            }
+            adapter._git_diff_for_file = lambda _file_path, staged=False: (
+                ""
+                if staged
+                else (
+                    "@@ -1,3 +1,4 @@\n"
+                    " def health():\n"
+                    "-    return {'ok': True}\n"
+                    "+    return {'ok': True, 'tests': 3}\n"
+                    "+\n"
+                    "+def ready():\n"
+                    "+    return True\n"
+                )
+            )
+
+            result = adapter.generate_change_analysis("ws_diff")
+
+        stats = result["file_diff_stats"]["app/main.py"]
+        self.assertEqual(stats["added_lines"], 4)
+        self.assertEqual(stats["deleted_lines"], 1)
+        self.assertEqual(stats["change_type"], "modified file")
+        self.assertTrue(any("return {'ok': True, 'tests': 3}" in snippet for snippet in stats["snippets"]))
+        self.assertIn("@@ -1,3 +1,4 @@", result["file_diffs"]["app/main.py"])
+
+    def test_generate_change_analysis_includes_parseable_diff_for_untracked_file(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            os.mkdir(os.path.join(tmp_dir, ".git"))
+            os.makedirs(os.path.join(tmp_dir, "app"))
+            with open(os.path.join(tmp_dir, "app", "new_file.py"), "w", encoding="utf-8") as f:
+                f.write("def created():\n")
+                f.write("    return True\n")
+
+            adapter = ChangeImpactAdapter(workspace_path=tmp_dir)
+            adapter._git_status_lines = lambda: ["?? app/new_file.py"]
+            adapter._load_graph_snapshot = lambda: {"modules": [], "dependencies": []}
+            adapter._extract_changed_python_facts = lambda _file_path, _status: {
+                "symbols": [],
+                "functions": [],
+                "classes": [],
+                "routes": [],
+                "changed_schemas": [],
+                "changed_jobs": [],
+                "affected_data_objects": [],
+            }
+
+            result = adapter.generate_change_analysis("ws_untracked")
+
+        diff_text = result["file_diffs"]["app/new_file.py"]
+        self.assertIn("--- /dev/null", diff_text)
+        self.assertIn("+++ b/app/new_file.py", diff_text)
+        self.assertIn("@@ -0,0 +1,2 @@", diff_text)
+        self.assertIn("+def created():", diff_text)
+
+    def test_generate_change_analysis_collects_agent_activity_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            os.mkdir(os.path.join(tmp_dir, ".git"))
+            log_path = os.path.join(tmp_dir, "history.jsonl")
+            with open(log_path, "w", encoding="utf-8") as f:
+                f.write('{"text":"把 app/main.py 的 diff 意义改成 Agent 归纳的改动说明"}\n')
+
+            adapter = ChangeImpactAdapter(workspace_path=tmp_dir)
+            adapter._git_status_lines = lambda: [" M app/main.py"]
+            adapter._load_graph_snapshot = lambda: {"modules": [], "dependencies": []}
+            adapter._git_diff_for_file = lambda _file_path, staged=False: ""
+            adapter._agent_log_candidates = lambda: [Path(log_path)]
+            adapter._extract_changed_python_facts = lambda _file_path, _status: {
+                "symbols": [],
+                "functions": [],
+                "classes": [],
+                "routes": [],
+                "changed_schemas": [],
+                "changed_jobs": [],
+                "affected_data_objects": [],
+            }
+
+            result = adapter.generate_change_analysis("ws_agent_logs")
+
+        evidence = result["agent_activity_evidence"]
+        self.assertEqual(evidence[0]["source"], "codex")
+        self.assertEqual(evidence[0]["related_files"], ["app/main.py"])
+        self.assertIn("Agent 归纳", evidence[0]["summary"])
+
+    def test_agent_activity_evidence_does_not_match_generic_basenames(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            os.mkdir(os.path.join(tmp_dir, ".git"))
+            log_path = os.path.join(tmp_dir, "history.jsonl")
+            with open(log_path, "w", encoding="utf-8") as f:
+                f.write('{"text":"另一个项目里的 service.py 需要调整生命周期"}\n')
+
+            adapter = ChangeImpactAdapter(workspace_path=tmp_dir)
+            adapter._git_status_lines = lambda: [" M backend/app/services/workspace_snapshot/service.py"]
+            adapter._load_graph_snapshot = lambda: {"modules": [], "dependencies": []}
+            adapter._git_diff_for_file = lambda _file_path, staged=False: ""
+            adapter._agent_log_candidates = lambda: [Path(log_path)]
+            adapter._extract_changed_python_facts = lambda _file_path, _status: {
+                "symbols": [],
+                "functions": [],
+                "classes": [],
+                "routes": [],
+                "changed_schemas": [],
+                "changed_jobs": [],
+                "affected_data_objects": [],
+            }
+
+            result = adapter.generate_change_analysis("ws_agent_logs")
+
+        self.assertEqual(result["agent_activity_evidence"], [])
 
     def test_generate_change_analysis_separates_direct_and_transitive_impacts_using_graph_evidence(self):
         with tempfile.TemporaryDirectory() as tmp_dir:

@@ -7,11 +7,11 @@ router = APIRouter()
 
 
 @router.get("/latest")
-async def get_latest_changes(repo_key: str):
+async def get_latest_changes(repo_key: str, workspace_path: str | None = None):
     """
     Get the details of the latest pending changes.
     """
-    latest_overview = snapshot_store.get_latest_overview(repo_key)
+    latest_overview = snapshot_store.get_latest_overview(repo_key, workspace_path=workspace_path)
     if not latest_overview:
         raise HTTPException(status_code=404, detail="OVERVIEW_NOT_READY: Please trigger a rebuild first.")
 
@@ -20,7 +20,7 @@ async def get_latest_changes(repo_key: str):
     if not snapshot_id:
         raise HTTPException(status_code=404, detail="CHANGE_ANALYSIS_UNAVAILABLE: Missing workspace snapshot pointer.")
 
-    change_data = snapshot_store.get_change_analysis(repo_key, snapshot_id)
+    change_data = snapshot_store.get_change_analysis(repo_key, snapshot_id, workspace_path=workspace_path)
     if not change_data:
         raise HTTPException(
             status_code=404,
@@ -33,18 +33,19 @@ async def get_latest_changes(repo_key: str):
 @router.get("/file-diff")
 async def get_file_diff(
     repo_key: str,
+    workspace_path: str | None = None,
     file_path: str = Query(..., description="Relative file path within the repo"),
 ):
     """
     Return unified diff for a single file (staged + unstaged changes vs HEAD).
     """
-    latest_overview = snapshot_store.get_latest_overview(repo_key)
+    latest_overview = snapshot_store.get_latest_overview(repo_key, workspace_path=workspace_path)
     if not latest_overview:
         raise HTTPException(status_code=404, detail="OVERVIEW_NOT_READY")
 
     snapshot = latest_overview.get("snapshot") or {}
     snapshot_id = snapshot.get("workspace_snapshot_id")
-    change_data = snapshot_store.get_change_analysis(repo_key, snapshot_id) if snapshot_id else None
+    change_data = snapshot_store.get_change_analysis(repo_key, snapshot_id, workspace_path=workspace_path) if snapshot_id else None
     workspace_path = (change_data or {}).get("workspace_path")
 
     if not workspace_path:

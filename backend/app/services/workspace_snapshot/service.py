@@ -20,7 +20,7 @@ class WorkspaceSnapshotService:
         base_commit_sha: str = "HEAD",
         include_untracked: bool = True,
     ) -> WorkspaceSnapshotState:
-        if not os.path.exists(os.path.join(workspace_path, ".git")):
+        if not self.is_git_workspace(workspace_path):
             raise RuntimeError(f"WORKSPACE_NOT_A_GIT_REPO: {workspace_path}")
 
         status_lines = self._git_status_lines(workspace_path, include_untracked=include_untracked)
@@ -44,6 +44,23 @@ class WorkspaceSnapshotService:
             status_lines=status_lines,
             fingerprint=fingerprint,
         )
+
+    def is_git_workspace(self, workspace_path: str) -> bool:
+        if not os.path.isdir(workspace_path):
+            return False
+
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--is-inside-work-tree"],
+                cwd=workspace_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
+
+        return result.stdout.strip() == "true"
 
     def _git_status_lines(self, workspace_path: str, include_untracked: bool) -> List[str]:
         cmd = ["git", "status", "--porcelain=v1"]

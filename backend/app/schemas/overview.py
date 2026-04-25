@@ -1,6 +1,8 @@
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any, Union, Literal
 from datetime import datetime
+
+from app.schemas.agent_harness import AgentHarnessChangeTheme, AgentHarnessProjectSummary, AgentHarnessStatus
 
 class RepoInfo(BaseModel):
     repo_key: str
@@ -42,11 +44,123 @@ class AgentReasoning(BaseModel):
     llm_reasoning: Dict[str, Any] = {}
 
 
-class ProjectSummary(BaseModel):
+class ProjectSummary(AgentHarnessProjectSummary):
     what_this_app_seems_to_do: str = ""
     technical_narrative: str = ""
     core_flow: str = ""
     agent_reasoning: Optional[AgentReasoning] = None
+
+
+class ChangeRiskHeadline(BaseModel):
+    overall_risk_level: Literal["high", "medium", "low", "unknown"] = "unknown"
+    overall_risk_summary: str = ""
+    recommended_focus: List[str] = Field(default_factory=list)
+
+
+class ChangeRiskCoverage(BaseModel):
+    coverage_status: Literal["well_covered", "partially_covered", "weakly_covered", "unknown"] = "unknown"
+    affected_test_count: int = 0
+    verified_changed_path_count: int = 0
+    unverified_changed_path_count: int = 0
+    missing_test_paths: List[str] = Field(default_factory=list)
+    coverage_summary: str = ""
+
+
+class ExistingFeatureImpactItem(BaseModel):
+    capability_key: str = ""
+    name: str = ""
+    impact_status: str = "unknown"
+    technical_entrypoints: List[str] = Field(default_factory=list)
+    changed_files: List[str] = Field(default_factory=list)
+    related_modules: List[str] = Field(default_factory=list)
+    verification_status: str = "unknown"
+    impact_basis: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class ExistingFeatureImpact(BaseModel):
+    business_impact_summary: str = ""
+    affected_capability_count: int = 0
+    affected_capabilities: List[ExistingFeatureImpactItem] = Field(default_factory=list)
+
+
+class RiskSignal(BaseModel):
+    signal_key: str = ""
+    title: str = ""
+    severity: Literal["high", "medium", "low"] = "low"
+    reason: str = ""
+    related_files: List[str] = Field(default_factory=list)
+    related_modules: List[str] = Field(default_factory=list)
+    mitigation: str = ""
+
+
+class ChangeRiskAgentMetadata(BaseModel):
+    agent_based_fields: List[str] = Field(default_factory=list)
+    rule_based_fields: List[str] = Field(default_factory=list)
+
+
+class ChangeRiskSummary(BaseModel):
+    headline: ChangeRiskHeadline = ChangeRiskHeadline()
+    coverage: ChangeRiskCoverage = ChangeRiskCoverage()
+    existing_feature_impact: ExistingFeatureImpact = ExistingFeatureImpact()
+    risk_signals: List[RiskSignal] = Field(default_factory=list)
+    agent_metadata: ChangeRiskAgentMetadata = ChangeRiskAgentMetadata()
+
+
+class TestAssetCapabilityCoverage(BaseModel):
+    capability_key: str = ""
+    business_capability: str = ""
+    coverage_status: Literal["covered", "partial", "missing", "unknown"] = "unknown"
+    technical_entrypoints: List[str] = Field(default_factory=list)
+    covered_paths: List[str] = Field(default_factory=list)
+    covering_tests: List[str] = Field(default_factory=list)
+    gaps: List[str] = Field(default_factory=list)
+    maintenance_recommendation: str = ""
+
+
+class TestAssetFile(BaseModel):
+    path: str = ""
+    maintenance_status: Literal["keep", "update", "retire", "unknown"] = "unknown"
+    covered_capabilities: List[str] = Field(default_factory=list)
+    covered_paths: List[str] = Field(default_factory=list)
+    linked_entrypoints: List[str] = Field(default_factory=list)
+    invalidation_reasons: List[str] = Field(default_factory=list)
+    recommendation: str = ""
+    evidence_status: str = "unknown"
+
+
+class TestAssetSummary(BaseModel):
+    health_status: Literal["healthy", "needs_maintenance", "high_risk", "unknown"] = "unknown"
+    total_test_file_count: int = 0
+    affected_test_count: int = 0
+    changed_test_file_count: int = 0
+    stale_or_invalid_test_count: int = 0
+    duplicate_or_low_value_test_count: int = 0
+    coverage_gaps: List[str] = Field(default_factory=list)
+    recommended_actions: List[str] = Field(default_factory=list)
+    capability_coverage: List[TestAssetCapabilityCoverage] = Field(default_factory=list)
+    test_files: List[TestAssetFile] = Field(default_factory=list)
+
+
+class FileDiffSnippet(BaseModel):
+    type: Literal["add", "delete", "context"] = "context"
+    line: str = ""
+    text: str = ""
+
+
+class FileReviewSummary(BaseModel):
+    path: str = ""
+    file_role: str = ""
+    risk_level: Literal["high", "medium", "low", "unknown"] = "unknown"
+    diff_summary: str = ""
+    diff_snippets: List[FileDiffSnippet] = Field(default_factory=list)
+    product_meaning: str = ""
+    intent_evidence: List[str] = Field(default_factory=list)
+    review_focus: List[str] = Field(default_factory=list)
+    related_entrypoints: List[str] = Field(default_factory=list)
+    related_capabilities: List[str] = Field(default_factory=list)
+    related_tests: List[str] = Field(default_factory=list)
+    evidence_basis: List[str] = Field(default_factory=list)
+    generated_by: Literal["rules", "agent", "rules+agent"] = "rules"
 
 
 class ImpactItem(BaseModel):
@@ -63,6 +177,8 @@ class RecentAIChange(BaseModel):
     change_id: str = "chg_unknown"
     change_title: str
     summary: str = ""
+    affected_capabilities: List[str] = Field(default_factory=list)
+    technical_entrypoints: List[str] = Field(default_factory=list)
     changed_files: List[str] = []
     changed_symbols: List[str] = []
     changed_routes: List[str] = []
@@ -113,6 +229,12 @@ class OverviewResponse(BaseModel):
     journeys: List[Dict[str, Any]] = []
     architecture_overview: ArchitectureOverview = ArchitectureOverview()
     recent_ai_changes: List[RecentAIChange] = []
+    change_themes: List[AgentHarnessChangeTheme] = Field(default_factory=list)
+    change_risk_summary: ChangeRiskSummary = ChangeRiskSummary()
+    test_asset_summary: TestAssetSummary = TestAssetSummary()
+    file_review_summaries: List[FileReviewSummary] = Field(default_factory=list)
+    agent_harness_status: Optional[AgentHarnessStatus] = None
+    agent_harness_metadata: Dict[str, Any] = Field(default_factory=dict)
     verification_status: VerificationStatus = VerificationStatus()
     warnings: List[str] = []
 

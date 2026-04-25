@@ -5,24 +5,32 @@ export function ChangedFileList({
   files,
   selectedFileId,
   onSelect,
+  title = 'Changed Files',
 }: {
   files: ChangedFileSummary[]
   selectedFileId: string | null
   onSelect: (file: ChangedFileSummary) => void
+  title?: string
 }) {
   return (
     <aside className={styles.panel} aria-label="changed-files">
-      <h2>Changed Files</h2>
-      {files.map(file => (
-        <button
-          key={file.file_id}
-          className={file.file_id === selectedFileId ? styles.selected : styles.file}
-          onClick={() => onSelect(file)}
-        >
-          <span>{file.path}</span>
-          <small>{file.status} +{file.additions} -{file.deletions}</small>
-        </button>
-      ))}
+      <header className={styles.header}>
+        <h2>{title}</h2>
+        <span>{files.length}</span>
+      </header>
+      <ul className={styles.list}>
+        {files.map(file => (
+          <li key={file.file_id}>
+            <button
+              className={file.file_id === selectedFileId ? styles.selected : styles.file}
+              onClick={() => onSelect(file)}
+            >
+              <span className={styles.path}>{file.path}</span>
+              <span className={styles.meta}>{file.status} +{file.additions} -{file.deletions}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
     </aside>
   )
 }

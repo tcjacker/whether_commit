@@ -48,7 +48,7 @@ export function VerificationCard({ status, loading, selectedModule, onSelectModu
       })
       const data = await resp.json()
       if (!resp.ok) {
-        setRunError(data.detail ?? 'Unknown error')
+        setRunError(data.detail ?? '未知错误')
       } else {
         setRunResult(data)
       }
@@ -61,7 +61,7 @@ export function VerificationCard({ status, loading, selectedModule, onSelectModu
 
   if (loading || !status) {
     return (
-      <CardShell title="Verification Status">
+      <CardShell title="验证状态">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {[1, 2, 3, 4].map(i => <SkeletonBlock key={i} height={32} />)}
         </div>
@@ -70,11 +70,14 @@ export function VerificationCard({ status, loading, selectedModule, onSelectModu
   }
 
   const rows = [
-    row('Build', status.build),
-    row('Unit tests', status.unit_tests),
-    row('Integration tests', status.integration_tests),
-    row('Scenario replay', status.scenario_replay),
+    row('构建', status.build),
+    row('单元测试', status.unit_tests),
+    row('集成测试', status.integration_tests),
+    row('场景回放', status.scenario_replay),
   ]
+  const verificationSummary = status.verified_changed_paths.length || status.unverified_changed_paths.length
+    ? `已验证路径 ${status.verified_changed_paths.length}，未验证路径 ${status.unverified_changed_paths.length}`
+    : null
 
   const unverifiedModules = [
     ...new Set([
@@ -84,8 +87,15 @@ export function VerificationCard({ status, loading, selectedModule, onSelectModu
   ]
 
   return (
-    <CardShell title="Verification Status">
+    <CardShell title="验证状态">
       <div className={styles.content}>
+        {verificationSummary && (
+          <div className={styles.section}>
+            <p className={styles.sectionTitle}>覆盖摘要</p>
+            <p className={styles.area}>{verificationSummary}</p>
+          </div>
+        )}
+
         <div className={styles.rows}>
           {rows.map(r => (
             <div key={r.label} className={styles.row}>
@@ -100,7 +110,7 @@ export function VerificationCard({ status, loading, selectedModule, onSelectModu
 
         {unverifiedModules.length > 0 && (
           <div className={styles.section}>
-            <p className={styles.sectionTitle}>Unverified changed areas</p>
+            <p className={styles.sectionTitle}>未验证的变更区域</p>
             <ul className={styles.moduleList}>
               {unverifiedModules.map(m => {
                 const isSelected = selectedModule === m
@@ -121,7 +131,7 @@ export function VerificationCard({ status, loading, selectedModule, onSelectModu
 
         {status.unverified_areas.length > 0 && (
           <div className={styles.section}>
-            <p className={styles.sectionTitle}>Unverified areas</p>
+            <p className={styles.sectionTitle}>未验证区域</p>
             <ul className={styles.areaList}>
               {status.unverified_areas.map((a, i) => (
                 <li key={i} className={styles.area}>⚠ {a}</li>
@@ -137,13 +147,13 @@ export function VerificationCard({ status, loading, selectedModule, onSelectModu
               onClick={handleRunTests}
               disabled={running}
             >
-              {running ? 'Running…' : 'Run Tests'}
+              {running ? '运行中…' : '运行测试'}
             </button>
 
             {runResult && (
               <div className={`${styles.runResult} ${runResult.status === 'passed' ? styles.runPassed : styles.runFailed}`}>
                 <span className={styles.runStatus}>
-                  {runResult.status === 'passed' ? '✓' : '✗'} {runResult.passed}/{runResult.total} passed
+                  {runResult.status === 'passed' ? '✓' : '✗'} 已通过 {runResult.passed}/{runResult.total}
                 </span>
                 <span className={styles.runDuration}>
                   {(runResult.duration_ms / 1000).toFixed(1)}s

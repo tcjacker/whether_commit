@@ -5,17 +5,20 @@
   padding: 20px;
 }
 
-/* Architecture card spans full row */
-.grid > :nth-child(5) {
+/* Project structure and architecture cards span full rows */
+.grid > :nth-child(3),
+.grid > :nth-child(8) {
   grid-column: 1 / -1;
 }
 
 @media (max-width: 1200px) {
   .grid { grid-template-columns: repeat(2, 1fr); }
-  .grid > :nth-child(5) { grid-column: 1 / -1; }
+  .grid > :nth-child(3),
+  .grid > :nth-child(8) { grid-column: 1 / -1; }
 }
 
 @media (max-width: 768px) {
   .grid { grid-template-columns: 1fr; }
-  .grid > :nth-child(5) { grid-column: 1; }
+  .grid > :nth-child(3),
+  .grid > :nth-child(8) { grid-column: 1; }
 }

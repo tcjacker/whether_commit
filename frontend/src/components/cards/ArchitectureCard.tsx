@@ -3,6 +3,7 @@ import { CardShell } from '../shared/CardShell'
 import { SkeletonBlock } from '../shared/SkeletonBlock'
 import { EmptyState } from '../shared/EmptyState'
 import { ArchitectureDiagram } from '../architecture/ArchitectureDiagram'
+import { zhNodeType } from '../../i18n'
 import styles from './ArchitectureCard.module.css'
 
 interface Props {
@@ -17,13 +18,13 @@ export function ArchitectureCard({ architecture, loading, highlightedNodeIds }: 
 
   return (
     <CardShell
-      title="System Architecture"
-      subtitle={nodeCount ? `${nodeCount} nodes · ${edgeCount} edges` : undefined}
+      title="系统架构"
+      subtitle={nodeCount ? `${nodeCount} 个节点 · ${edgeCount} 条边` : undefined}
     >
       {loading ? (
         <SkeletonBlock height={300} />
       ) : nodeCount === 0 ? (
-        <EmptyState message="Architecture graph not yet available." />
+        <EmptyState message="暂未生成架构图。" />
       ) : (
         <div className={styles.wrap}>
           <ArchitectureDiagram
@@ -36,7 +37,7 @@ export function ArchitectureCard({ architecture, loading, highlightedNodeIds }: 
             {['service', 'repository', 'external integration', 'config'].map(t => (
               <span key={t} className={styles.legendItem}>
                 <span className={styles.dot} style={{ background: TYPE_SAMPLE[t] }} />
-                {t}
+                {zhNodeType(t)}
               </span>
             ))}
           </div>

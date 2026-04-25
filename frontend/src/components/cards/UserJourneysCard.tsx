@@ -3,6 +3,7 @@ import type { JourneyItem } from '../../types/api'
 import { CardShell } from '../shared/CardShell'
 import { SkeletonBlock } from '../shared/SkeletonBlock'
 import { EmptyState } from '../shared/EmptyState'
+import { zhCount, zhCriticality } from '../../i18n'
 import styles from './UserJourneysCard.module.css'
 
 interface Props {
@@ -16,13 +17,13 @@ export function UserJourneysCard({ journeys, loading, highlightedNames }: Props)
   const hasHighlight = highlightedNames.size > 0
 
   return (
-    <CardShell title="User Journeys" subtitle={`${journeys.length} paths`}>
+    <CardShell title="用户旅程" subtitle={zhCount(journeys.length, '条路径')}>
       {loading ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[1, 2].map(i => <SkeletonBlock key={i} height={52} />)}
         </div>
       ) : journeys.length === 0 ? (
-        <EmptyState message="No user journeys inferred yet." />
+        <EmptyState message="暂未推断出用户旅程。" />
       ) : (
         <ul className={styles.list}>
           {journeys.map(j => {
@@ -38,7 +39,7 @@ export function UserJourneysCard({ journeys, loading, highlightedNames }: Props)
                   <span className={styles.name}>{j.name}</span>
                   {j.criticality && (
                     <span className={`${styles.crit} ${styles[j.criticality] ?? ''}`}>
-                      {j.criticality}
+                      {zhCriticality(j.criticality)}
                     </span>
                   )}
                   {j.primary_actor && (

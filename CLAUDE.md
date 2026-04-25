@@ -6,19 +6,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Install dependencies
-python3.11 -m pip install -r backend/requirements.txt
+uv sync --python 3.11 --all-groups
 
 # Run the server (from repo root)
-python3.11 -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn --app-dir backend app.main:app --reload --host 0.0.0.0 --port 8000
 
 # Run all tests
-PYTHONPATH=backend python3.11 -m pytest backend/tests/ -v
+uv run pytest backend/tests/ -v
 
 # Run a single test file
-PYTHONPATH=backend python3.11 -m pytest backend/tests/test_overview_inference.py -v
+uv run pytest backend/tests/test_overview_inference.py -v
 
 # Run a specific test
-PYTHONPATH=backend python3.11 -m pytest backend/tests/test_snapshot_store.py::TestSnapshotStore::test_write_read -v
+uv run pytest backend/tests/test_snapshot_store.py::TestSnapshotStore::test_write_read -v
 ```
 
 ## Environment Configuration

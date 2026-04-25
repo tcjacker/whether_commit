@@ -143,8 +143,17 @@ class OverviewEndpointTest(unittest.TestCase):
             result = asyncio.run(get_overview(repo_key="demo", workspace_snapshot_id="ws_specific"))
 
         self.assertEqual(result.snapshot.workspace_snapshot_id, "ws_specific")
-        get_overview_mock.assert_called_once_with("demo", "ws_specific")
+        get_overview_mock.assert_called_once_with("demo", "ws_specific", workspace_path=None)
         latest_mock.assert_not_called()
+
+    def test_get_overview_prefers_workspace_specific_latest_snapshot(self):
+        payload = _overview_payload("ws_workspace")
+
+        with patch.object(snapshot_store, "get_latest_overview", return_value=payload) as latest_mock:
+            result = asyncio.run(get_overview(repo_key="demo", workspace_path="/tmp/demo"))
+
+        self.assertEqual(result.snapshot.workspace_snapshot_id, "ws_workspace")
+        latest_mock.assert_called_once_with("demo", workspace_path="/tmp/demo")
 
     def test_trigger_rebuild_forwards_include_untracked(self):
         async def _run():
@@ -174,7 +183,7 @@ class OverviewEndpointTest(unittest.TestCase):
 
     def test_get_latest_changes_reads_snapshot_store(self):
         change_payload = {
-            "change_title": "Workspace diff (1 files)",
+            "change_title": "工作区差异（1 个文件）",
             "changed_files": ["app/main.py"],
             "impact_reasons": [
                 {"entity_id": "mod_app", "reason": "direct_file_change", "distance": 0},
@@ -204,7 +213,7 @@ class OverviewEndpointTest(unittest.TestCase):
             result = asyncio.run(get_latest_changes(repo_key="demo"))
 
         self.assertEqual(result, change_payload)
-        change_mock.assert_called_once_with("demo", "ws_latest")
+        change_mock.assert_called_once_with("demo", "ws_latest", workspace_path=None)
         self.assertEqual(result["impact_reasons"], change_payload["impact_reasons"])
         self.assertEqual(result["direct_impacts"], change_payload["direct_impacts"])
         self.assertEqual(result["transitive_impacts"], change_payload["transitive_impacts"])
@@ -234,7 +243,7 @@ class OverviewEndpointTest(unittest.TestCase):
             result = asyncio.run(get_verification_details(repo_key="demo"))
 
         self.assertEqual(result, verification_payload)
-        verification_mock.assert_called_once_with("demo", "ws_latest")
+        verification_mock.assert_called_once_with("demo", "ws_latest", workspace_path=None)
 
     def test_get_verification_reports_missing_snapshot_artifact_explicitly(self):
         overview_payload = _overview_payload("ws_latest")

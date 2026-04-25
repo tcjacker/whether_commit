@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project Structure Change Review V1</title>
+  <style>
+    :root {
+      --bg: #101418;
+      --panel: #171d23;
+      --panel-2: #1d252d;
+      --card: #222b34;
+      --line: #33414d;
+      --line-soft: #29343e;
+      --text: #edf3f7;
+      --muted: #9aaab5;
+      --muted-2: #6f808c;
+      --green: #42c583;
+      --amber: #e1a449;
+      --red: #ee625a;
+      --blue: #5fa8e8;
+      --teal: #4cc6b7;
+      --violet: #a78bfa;
+      --radius: 8px;
+      --shadow: 0 18px 48px rgba(0, 0, 0, 0.26);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        linear-gradient(120deg, rgba(76, 198, 183, 0.08), transparent 28%),
+        linear-gradient(240deg, rgba(225, 164, 73, 0.07), transparent 30%),
+        var(--bg);
+      font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+      line-height: 1.5;
+    }
+
+    .page {
+      width: min(1500px, calc(100vw - 28px));
+      margin: 14px auto;
+      min-height: calc(100vh - 28px);
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 14px;
+    }
+
+    .topbar,
+    .summary,
+    .workspace,
+    .panel,
+    .structure-card,
+    .detail-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(23, 29, 35, 0.94);
+      box-shadow: var(--shadow);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      color: #08110f;
+      background: var(--green);
+      font-weight: 900;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    .brand p {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .chip,
+    .button,
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      min-height: 30px;
+      padding: 0 10px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.03);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .button {
+      color: var(--text);
+      background: var(--panel-2);
+    }
+
+    .badge.high { color: #ffd6d3; border-color: rgba(238, 98, 90, 0.45); background: rgba(238, 98, 90, 0.12); }
+    .badge.medium { color: #ffe3b7; border-color: rgba(225, 164, 73, 0.45); background: rgba(225, 164, 73, 0.12); }
+    .badge.low { color: #c6f4dc; border-color: rgba(66, 197, 131, 0.45); background: rgba(66, 197, 131, 0.12); }
+    .badge.info { color: #cfebff; border-color: rgba(95, 168, 232, 0.45); background: rgba(95, 168, 232, 0.12); }
+
+    .summary {
+      display: grid;
+      grid-template-columns: 1.25fr 0.85fr 0.9fr;
+      gap: 12px;
+      padding: 14px;
+    }
+
+    .summary-card {
+      min-width: 0;
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      padding: 14px;
+      background: linear-gradient(180deg, rgba(34, 43, 52, 0.9), rgba(29, 37, 45, 0.92));
+    }
+
+    .summary-card h2,
+    .panel h2,
+    .detail-card h3,
+    .structure-card h3 {
+      margin: 0;
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .summary-card strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 22px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .summary-card p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr) 350px;
+      gap: 12px;
+      padding: 12px;
+      min-height: 680px;
+    }
+
+    .panel {
+      min-width: 0;
+      padding: 14px;
+      box-shadow: none;
+      overflow: hidden;
+    }
+
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .structure-list,
+    .detail-list,
+    .rail-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .structure-card {
+      box-shadow: none;
+      padding: 12px;
+      background: var(--panel-2);
+    }
+
+    .structure-card.active {
+      border-color: rgba(95, 168, 232, 0.65);
+      background: linear-gradient(180deg, rgba(35, 50, 61, 0.96), rgba(27, 38, 47, 0.98));
+    }
+
+    .structure-card .row,
+    .detail-card .row,
+    .path-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .structure-card h3 {
+      color: var(--text);
+      font-size: 14px;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    .counts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .count {
+      border-radius: 6px;
+      padding: 4px 7px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.04);
+      font-size: 11px;
+    }
+
+    .file-tree {
+      margin-top: 10px;
+      padding: 9px 10px;
+      border: 1px solid var(--line-soft);
+      border-radius: 7px;
+      background: rgba(0, 0, 0, 0.12);
+      color: var(--muted);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+
+    .file-tree div + div { margin-top: 4px; }
+    .file-tree .changed { color: var(--text); }
+    .file-tree .test { color: #bcebd2; }
+    .file-tree .gap { color: #ffd1a1; }
+
+    .tree {
+      display: grid;
+      gap: 8px;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+
+    .tree-section {
+      border: 1px solid var(--line-soft);
+      border-radius: 7px;
+      background: rgba(0, 0, 0, 0.11);
+      overflow: hidden;
+    }
+
+    .tree-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 9px;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.035);
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .tree-heading span:first-child {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .tree-count {
+      flex: 0 0 auto;
+      color: var(--muted-2);
+      font-size: 11px;
+    }
+
+    .tree-node {
+      display: grid;
+      grid-template-columns: 16px minmax(0, 1fr) auto;
+      gap: 6px;
+      align-items: center;
+      min-height: 30px;
+      padding: 5px 9px;
+      color: var(--muted);
+      border-top: 1px solid rgba(41, 52, 62, 0.7);
+      cursor: pointer;
+    }
+
+    .tree-node:first-child { border-top: 0; }
+    .tree-node:hover,
+    .tree-node:focus {
+      outline: none;
+      color: var(--text);
+      background: rgba(95, 168, 232, 0.08);
+    }
+    .tree-node.active {
+      color: var(--text);
+      background: rgba(95, 168, 232, 0.13);
+    }
+
+    .tree-node .name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .tree-node .meta {
+      display: inline-flex;
+      gap: 5px;
+      align-items: center;
+      color: var(--muted-2);
+      font-size: 11px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--blue);
+    }
+
+    .status-dot.green { background: var(--green); }
+    .status-dot.amber { background: var(--amber); }
+    .status-dot.red { background: var(--red); }
+    .indent-1 { padding-left: 22px; }
+    .indent-2 { padding-left: 38px; }
+
+    .main {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .context-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .mini {
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      padding: 10px;
+      background: var(--panel-2);
+    }
+
+    .mini span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .mini strong {
+      display: block;
+      margin-top: 5px;
+      font-size: 17px;
+    }
+
+    .detail-card {
+      box-shadow: none;
+      padding: 15px;
+      background: linear-gradient(180deg, rgba(34, 43, 52, 0.92), rgba(25, 32, 39, 0.96));
+    }
+
+    .detail-card + .detail-card { margin-top: 12px; }
+
+    .detail-title {
+      display: grid;
+      gap: 6px;
+    }
+
+    .detail-title h3 {
+      color: var(--text);
+      font-size: 18px;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    .detail-title p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .box {
+      min-width: 0;
+      border: 1px solid var(--line-soft);
+      border-radius: 7px;
+      padding: 11px;
+      background: rgba(0, 0, 0, 0.12);
+    }
+
+    .box h4 {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .path-row {
+      padding: 8px 0;
+      border-top: 1px solid var(--line-soft);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .path-row:first-of-type { border-top: 0; padding-top: 0; }
+    .path-row code { color: var(--text); overflow-wrap: anywhere; }
+
+    code {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+
+    .business-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .tag {
+      border-radius: 6px;
+      padding: 4px 7px;
+      color: #d9e9f5;
+      background: rgba(95, 168, 232, 0.13);
+      border: 1px solid rgba(95, 168, 232, 0.28);
+      font-size: 11px;
+    }
+
+    .test-map {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .node {
+      border: 1px solid var(--line-soft);
+      border-radius: 7px;
+      padding: 9px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .arrow {
+      color: var(--muted-2);
+      font-weight: 800;
+    }
+
+    .file-diff-card {
+      margin-top: 14px;
+      border: 1px solid var(--line-soft);
+      border-radius: 7px;
+      overflow: hidden;
+      background: rgba(0, 0, 0, 0.15);
+    }
+
+    .file-diff-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line-soft);
+      background: rgba(255, 255, 255, 0.035);
+    }
+
+    .file-diff-head strong {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .diff-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
+      gap: 0;
+    }
+
+    .diff-lines {
+      padding: 10px 0;
+      border-right: 1px solid var(--line-soft);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+      overflow-x: auto;
+    }
+
+    .diff-line {
+      display: grid;
+      grid-template-columns: 52px minmax(520px, 1fr);
+      gap: 10px;
+      padding: 2px 12px;
+      white-space: pre;
+    }
+
+    .line-no {
+      color: var(--muted-2);
+      text-align: right;
+      user-select: none;
+    }
+
+    .diff-line.add {
+      color: #d8fbe8;
+      background: rgba(66, 197, 131, 0.09);
+    }
+
+    .diff-line.context {
+      color: var(--muted);
+    }
+
+    .meaning {
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+
+    .meaning h4 {
+      margin: 0;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .meaning p {
+      margin: 0;
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .meaning-list {
+      display: grid;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .meaning-list div {
+      display: grid;
+      grid-template-columns: 8px 1fr;
+      gap: 8px;
+      align-items: start;
+    }
+
+    .rail-card {
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: var(--panel-2);
+    }
+
+    .rail-card h3 {
+      margin: 0 0 9px;
+      font-size: 13px;
+    }
+
+    .rail-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .risk-line {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .risk-item {
+      display: grid;
+      grid-template-columns: 8px 1fr;
+      gap: 8px;
+      align-items: start;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .risk-dot {
+      width: 8px;
+      height: 8px;
+      margin-top: 5px;
+      border-radius: 999px;
+      background: var(--amber);
+    }
+
+    .risk-dot.red { background: var(--red); }
+    .risk-dot.green { background: var(--green); }
+
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .legend-item {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      background: var(--blue);
+    }
+
+    .swatch.teal { background: var(--teal); }
+    .swatch.green { background: var(--green); }
+    .swatch.amber { background: var(--amber); }
+
+    @media (max-width: 1180px) {
+      .summary,
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .context-strip,
+      .columns {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .page { width: calc(100vw - 16px); margin: 8px auto; }
+      .topbar { align-items: flex-start; flex-direction: column; }
+      .summary,
+      .workspace { padding: 8px; }
+      .context-strip,
+      .columns,
+      .test-map {
+        grid-template-columns: 1fr;
+      }
+      .arrow { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="topbar">
+      <div class="brand">
+        <div class="mark">Δ</div>
+        <div>
+          <h1>项目结构变更总览 V2</h1>
+          <p>backend_visiable · workspace diff · 左侧只按真实目录树导航，diff 意义放到中间解释</p>
+        </div>
+      </div>
+      <div class="actions">
+        <span class="chip">HEAD → ws_b4d95f</span>
+        <span class="chip">14 个相关测试</span>
+        <span class="badge medium">中风险</span>
+        <span class="button">重新分析</span>
+      </div>
+    </header>
+
+    <section class="summary">
+      <article class="summary-card">
+        <h2>结论</h2>
+        <strong>这次改动集中在 Overview 输出、首页展示和测试资产规则层。</strong>
+        <p>主风险来自接口响应结构扩展和前端首页阅读顺序变化；当前测试覆盖充足，但需要持续管理 AI 新增测试。</p>
+      </article>
+      <article class="summary-card">
+        <h2>测试资产</h2>
+        <strong>健康 · 14 个相关测试</strong>
+        <p>本次改动测试文件 13 个；未发现覆盖缺口。后续重点是识别重复测试和低价值断言。</p>
+      </article>
+      <article class="summary-card">
+        <h2>开发者下一步</h2>
+        <strong>先看对外接口，再看内部规则 Builder。</strong>
+        <p>如果要 review，优先打开 overview schema、inference service、测试资产 builder 和首页卡片。</p>
+      </article>
+    </section>
+
+    <section class="workspace">
+      <aside class="panel">
+        <div class="panel-head">
+          <h2>项目结构</h2>
+          <span class="badge info">目录树</span>
+        </div>
+        <div class="tree">
+          <section class="tree-section">
+            <div class="tree-heading">
+              <span>backend/</span>
+              <span class="tree-count">7 files · +214</span>
+            </div>
+            <div class="tree-node active indent-1" role="button" tabindex="0" data-file="backend/app/schemas/overview.py">
+              <span class="status-dot amber"></span>
+              <span class="name">app/schemas/overview.py</span>
+              <span class="meta">+64 API</span>
+            </div>
+            <div class="tree-node indent-1" role="button" tabindex="0" data-file="backend/app/services/overview_inference">
+              <span class="status-dot red"></span>
+              <span class="name">app/services/overview_inference/</span>
+              <span class="meta">3 files</span>
+            </div>
+            <div class="tree-node indent-2" role="button" tabindex="0" data-file="backend/app/services/overview_inference/service.py">
+              <span class="status-dot amber"></span>
+              <span class="name">service.py</span>
+              <span class="meta">+12 merge</span>
+            </div>
+            <div class="tree-node indent-2" role="button" tabindex="0" data-file="backend/app/services/overview_inference/test_asset_summary.py">
+              <span class="status-dot red"></span>
+              <span class="name">test_asset_summary.py</span>
+              <span class="meta">+230 new</span>
+            </div>
+            <div class="tree-node indent-1" role="button" tabindex="0" data-file="backend/tests/test_overview_inference.py">
+              <span class="status-dot green"></span>
+              <span class="name">tests/test_overview_inference.py</span>
+              <span class="meta">+107 tests</span>
+            </div>
+          </section>
+
+          <section class="tree-section">
+            <div class="tree-heading">
+              <span>frontend/</span>
+              <span class="tree-count">5 files · +188</span>
+            </div>
+            <div class="tree-node indent-1" role="button" tabindex="0" data-file="frontend/src/types/api.ts">
+              <span class="status-dot amber"></span>
+              <span class="name">src/types/api.ts</span>
+              <span class="meta">+35 type</span>
+            </div>
+            <div class="tree-node indent-1" role="button" tabindex="0" data-file="frontend/src/pages/OverviewPage.tsx">
+              <span class="status-dot amber"></span>
+              <span class="name">src/pages/OverviewPage.tsx</span>
+              <span class="meta">+6 mount</span>
+            </div>
+            <div class="tree-node indent-1" role="button" tabindex="0" data-file="frontend/src/components/cards">
+              <span class="status-dot amber"></span>
+              <span class="name">src/components/cards/</span>
+              <span class="meta">2 files</span>
+            </div>
+            <div class="tree-node indent-2" role="button" tabindex="0" data-file="frontend/src/components/cards/TestAssetSummaryCard.tsx">
+              <span class="status-dot amber"></span>
+              <span class="name">TestAssetSummaryCard.tsx</span>
+              <span class="meta">+137 new</span>
+            </div>
+            <div class="tree-node indent-2" role="button" tabindex="0" data-file="frontend/src/components/cards/__tests__/overview-cards.test.tsx">
+              <span class="status-dot green"></span>
+              <span class="name">__tests__/overview-cards.test.tsx</span>
+              <span class="meta">+55 tests</span>
+            </div>
+          </section>
+
+          <section class="tree-section">
+            <div class="tree-heading">
+              <span>docs/</span>
+              <span class="tree-count">1 file</span>
+            </div>
+            <div class="tree-node indent-1" role="button" tabindex="0" data-file="docs/mockups/project_structure_change_review_v1.html">
+              <span class="status-dot green"></span>
+              <span class="name">mockups/project_structure_change_review_v1.html</span>
+              <span class="meta">ux</span>
+            </div>
+          </section>
+        </div>
+      </aside>
+
+      <section class="main">
+        <div class="context-strip">
+          <div class="mini"><span>业务能力</span><strong>测试资产健康</strong></div>
+          <div class="mini"><span>技术入口</span><strong>GET /api/overview</strong></div>
+          <div class="mini"><span>风险来源</span><strong>响应结构扩展</strong></div>
+          <div class="mini"><span>验证状态</span><strong>41 后端 · 9 前端</strong></div>
+        </div>
+
+        <div>
+          <article class="detail-card">
+            <div class="row">
+              <div class="detail-title">
+                <h3 id="selected-title">当前文件：backend/app/schemas/overview.py</h3>
+                <p id="selected-lead">先按文件看 diff，再解释 diff 的产品意义：这个文件把测试资产管理正式变成 overview API 契约的一部分。</p>
+              </div>
+              <span id="selected-badge" class="badge medium">需要 review</span>
+            </div>
+
+            <div class="columns">
+              <div class="box">
+                <h4>文件与入口</h4>
+                <div id="selected-entrypoints">
+                  <div class="path-row"><code>backend/app/schemas/overview.py</code><span>API schema</span></div>
+                  <div class="path-row"><code>frontend/src/types/api.ts</code><span>TS contract</span></div>
+                  <div class="path-row"><code>GET /api/overview</code><span>新增字段</span></div>
+                </div>
+              </div>
+              <div class="box">
+                <h4>解释层</h4>
+                <div id="selected-tags" class="business-tags">
+                  <span class="tag">测试资产健康</span>
+                  <span class="tag">测试覆盖路径</span>
+                  <span class="tag">疑似失效测试</span>
+                </div>
+                <p id="selected-core" style="margin: 10px 0 0; color: var(--muted); font-size: 12px;">
+                  这组文件的核心含义不是“加字段”，而是让用户在首页直接看到测试资产是否可信。
+                </p>
+              </div>
+            </div>
+
+            <div class="file-diff-card">
+              <div class="file-diff-head">
+                <strong id="selected-diff-title">diff 摘要 · backend/app/schemas/overview.py</strong>
+                <span id="selected-diff-badge" class="badge medium">+64 lines · additive contract</span>
+              </div>
+              <div class="diff-grid">
+                <div id="selected-diff-lines" class="diff-lines" aria-label="diff-preview">
+                  <div class="diff-line context"><span class="line-no">89</span><span>class ChangeRiskSummary(BaseModel):</span></div>
+                  <div class="diff-line context"><span class="line-no">90</span><span>    headline: ChangeRiskHeadline = ChangeRiskHeadline()</span></div>
+                  <div class="diff-line add"><span class="line-no">+97</span><span>class TestAssetCapabilityCoverage(BaseModel):</span></div>
+                  <div class="diff-line add"><span class="line-no">+98</span><span>    capability_key: str = ""</span></div>
+                  <div class="diff-line add"><span class="line-no">+99</span><span>    business_capability: str = ""</span></div>
+                  <div class="diff-line add"><span class="line-no">+100</span><span>    coverage_status: Literal["covered", "partial", "missing", "unknown"] = "unknown"</span></div>
+                  <div class="diff-line add"><span class="line-no">+101</span><span>    technical_entrypoints: List[str] = Field(default_factory=list)</span></div>
+                  <div class="diff-line add"><span class="line-no">+102</span><span>    covered_paths: List[str] = Field(default_factory=list)</span></div>
+                  <div class="diff-line add"><span class="line-no">+103</span><span>    covering_tests: List[str] = Field(default_factory=list)</span></div>
+                  <div class="diff-line add"><span class="line-no">+121</span><span>class TestAssetSummary(BaseModel):</span></div>
+                  <div class="diff-line add"><span class="line-no">+122</span><span>    health_status: Literal["healthy", "needs_maintenance", "high_risk", "unknown"] = "unknown"</span></div>
+                  <div class="diff-line add"><span class="line-no">+129</span><span>    capability_coverage: List[TestAssetCapabilityCoverage] = Field(default_factory=list)</span></div>
+                  <div class="diff-line add"><span class="line-no">+130</span><span>    test_files: List[TestAssetFile] = Field(default_factory=list)</span></div>
+                  <div class="diff-line context"><span class="line-no">207</span><span>class OverviewResponse(BaseModel):</span></div>
+                  <div class="diff-line add"><span class="line-no">+216</span><span>    test_asset_summary: TestAssetSummary = TestAssetSummary()</span></div>
+                </div>
+                <div class="meaning">
+                  <h4>这段 diff 的意义</h4>
+                  <p id="selected-meaning-main">它不是普通字段追加，而是新增一个“测试资产治理”的 API 子模型。</p>
+                  <div id="selected-meaning-list" class="meaning-list">
+                    <div><span class="risk-dot green"></span><span>用户能看到测试覆盖了哪些业务能力和代码路径。</span></div>
+                    <div><span class="risk-dot"></span><span>前端需要兼容旧 snapshot 没有该字段的情况。</span></div>
+                    <div><span class="risk-dot"></span><span>字段是 additive，旧调用方不会因为响应多字段而破坏。</span></div>
+                    <div><span class="risk-dot red"></span><span>如果 coverage_status 算错，会误导用户保留或淘汰测试。</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="selected-flow" class="test-map">
+              <div class="node"><code>overview.py</code><br />定义 TestAssetSummary</div>
+              <div class="arrow">→</div>
+              <div class="node"><code>OverviewPage</code><br />展示测试资产健康卡</div>
+            </div>
+          </article>
+
+          <article class="detail-card">
+            <div class="row">
+              <div class="detail-title">
+                <h3>目录展开：backend/app/services/overview_inference/</h3>
+                <p>目录层显示“哪些文件共同完成一个行为变化”，文件层显示每个 diff 对行为的实际意义。</p>
+              </div>
+              <span class="badge high">核心逻辑</span>
+            </div>
+
+            <div class="columns">
+              <div class="box">
+                <h4>业务路径 → 技术入口</h4>
+                <div class="path-row"><code>TestAssetSummaryBuilder.build()</code><span>汇总入口</span></div>
+                <div class="path-row"><code>capability_coverage[]</code><span>能力覆盖</span></div>
+                <div class="path-row"><code>test_files[]</code><span>测试维护</span></div>
+              </div>
+              <div class="box">
+                <h4>规则判断</h4>
+                <div class="risk-line">
+                  <div class="risk-item"><span class="risk-dot green"></span><span>有 affected_tests 且无 coverage_gaps → 测试资产健康</span></div>
+                  <div class="risk-item"><span class="risk-dot"></span><span>有覆盖缺口或测试文件变动 → 需要维护</span></div>
+                  <div class="risk-item"><span class="risk-dot red"></span><span>缺口存在且没有相关测试 → 高风险</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="file-diff-card">
+              <div class="file-diff-head">
+                <strong>diff 摘要 · test_asset_summary.py</strong>
+                <span class="badge high">new file · rule engine</span>
+              </div>
+              <div class="diff-grid">
+                <div class="diff-lines" aria-label="diff-preview">
+                  <div class="diff-line add"><span class="line-no">+8</span><span>class TestAssetSummaryBuilder:</span></div>
+                  <div class="diff-line add"><span class="line-no">+12</span><span>    def build(self, *, change_data, verification_data, capability_map):</span></div>
+                  <div class="diff-line add"><span class="line-no">+19</span><span>        changed_test_files = [path for path in changed_files if self._is_test_path(path)]</span></div>
+                  <div class="diff-line add"><span class="line-no">+22</span><span>        coverage_gaps = list(verification_data.get("missing_tests_for_changed_paths", []))</span></div>
+                  <div class="diff-line add"><span class="line-no">+36</span><span>        stale_or_invalid_test_count = sum(... maintenance_status in {"update", "retire"})</span></div>
+                  <div class="diff-line add"><span class="line-no">+47</span><span>            "recommended_actions": self._recommended_actions(...)</span></div>
+                  <div class="diff-line add"><span class="line-no">+132</span><span>            if coverage_gaps: invalidation_reasons.append(...)</span></div>
+                </div>
+                <div class="meaning">
+                  <h4>这段 diff 的意义</h4>
+                  <p>它把“测试文件是否还值得保留”从主观判断变成可解释的规则事实。</p>
+                  <div class="meaning-list">
+                    <div><span class="risk-dot green"></span><span>先用规则计算覆盖缺口和维护状态，避免 Agent 直接拍脑袋。</span></div>
+                    <div><span class="risk-dot"></span><span>能把测试文件反向关联到业务能力、技术入口和被测路径。</span></div>
+                    <div><span class="risk-dot red"></span><span>当前重复/低价值测试还没有语义去重，只能显示为后续增强项。</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="detail-card">
+            <div class="row">
+              <div class="detail-title">
+                <h3>测试资产层：测试文件以“被测路径”组织</h3>
+                <p>测试文件不是单独列清单，而是显示它覆盖哪些代码路径、是否仍然命中真实入口、是否需要维护。</p>
+              </div>
+              <span class="badge low">已验证</span>
+            </div>
+
+            <div class="columns">
+              <div class="box">
+                <h4>测试文件</h4>
+                <div class="path-row"><code>backend/tests/test_overview_inference.py</code><span>后端规则</span></div>
+                <div class="path-row"><code>overview-cards.test.tsx</code><span>卡片渲染</span></div>
+                <div class="path-row"><code>OverviewPage.test.tsx</code><span>首页集成</span></div>
+              </div>
+              <div class="box">
+                <h4>覆盖路径</h4>
+                <div class="path-row"><code>test_asset_summary</code><span>API 输出</span></div>
+                <div class="path-row"><code>TestAssetSummaryCard</code><span>用户可见</span></div>
+                <div class="path-row"><code>GET /api/overview</code><span>端到端契约</span></div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <div class="panel-head">
+          <h2>证据与操作</h2>
+          <span class="badge info">辅助</span>
+        </div>
+        <div class="rail-list">
+          <article class="rail-card">
+            <h3>当前选中分组的风险</h3>
+            <div id="selected-risks" class="risk-line">
+              <div class="risk-item"><span class="risk-dot"></span><span>API 增加字段后，旧 snapshot 可能没有 `test_asset_summary`，前端需兼容空值。</span></div>
+              <div class="risk-item"><span class="risk-dot green"></span><span>新增字段不改变旧字段语义，属于 additive contract。</span></div>
+              <div class="risk-item"><span class="risk-dot"></span><span>测试资产重复度还未接 Graphify，需要后续增强。</span></div>
+            </div>
+          </article>
+
+          <article class="rail-card">
+            <h3>Review 顺序建议</h3>
+            <p id="selected-review-order">1. 先看 schema 和 TS type，确认 API 契约。<br />2. 再看 builder 规则是否保守。<br />3. 最后看首页卡片是否按开发者阅读顺序展示。</p>
+          </article>
+
+          <article class="rail-card">
+            <h3>Graphify 可补强的位置</h3>
+            <p>把测试文件连接到 CodeUnit 和 FeatureContainer，用来识别重复测试、孤儿测试和跨社区测试影响。</p>
+            <div class="legend">
+              <div class="legend-item"><span class="swatch"></span>对外入口</div>
+              <div class="legend-item"><span class="swatch teal"></span>内部模块</div>
+              <div class="legend-item"><span class="swatch green"></span>测试资产</div>
+              <div class="legend-item"><span class="swatch amber"></span>风险缺口</div>
+            </div>
+          </article>
+
+          <article class="rail-card">
+            <h3>为什么这样更适合开发者</h3>
+            <p>主线是文件路径和目录结构，可信；业务能力、风险、测试覆盖作为解释层出现，能帮用户理解“这组文件为什么重要”。</p>
+          </article>
+        </div>
+      </aside>
+    </section>
+  </main>
+  <script>
+    const fileDetails = {
+      "backend/app/schemas/overview.py": {
+        badge: ["medium", "需要 review"],
+        title: "当前文件：backend/app/schemas/overview.py",
+        lead: "先按文件看 diff，再解释 diff 的产品意义：这个文件把测试资产管理正式变成 overview API 契约的一部分。",
+        entrypoints: [
+          ["backend/app/schemas/overview.py", "API schema"],
+          ["frontend/src/types/api.ts", "TS contract"],
+          ["GET /api/overview", "新增字段"],
+        ],
+        tags: ["测试资产健康", "测试覆盖路径", "疑似失效测试"],
+        core: "这组文件的核心含义不是“加字段”，而是让用户在首页直接看到测试资产是否可信。",
+        diffTitle: "diff 摘要 · backend/app/schemas/overview.py",
+        diffBadge: ["medium", "+64 lines · additive contract"],
+        diffLines: [
+          ["context", "89", "class ChangeRiskSummary(BaseModel):"],
+          ["context", "90", "    headline: ChangeRiskHeadline = ChangeRiskHeadline()"],
+          ["add", "+97", "class TestAssetCapabilityCoverage(BaseModel):"],
+          ["add", "+98", "    capability_key: str = \"\""],
+          ["add", "+99", "    business_capability: str = \"\""],
+          ["add", "+100", "    coverage_status: Literal[\"covered\", \"partial\", \"missing\", \"unknown\"] = \"unknown\""],
+          ["add", "+101", "    technical_entrypoints: List[str] = Field(default_factory=list)"],
+          ["add", "+102", "    covered_paths: List[str] = Field(default_factory=list)"],
+          ["add", "+103", "    covering_tests: List[str] = Field(default_factory=list)"],
+          ["add", "+121", "class TestAssetSummary(BaseModel):"],
+          ["add", "+122", "    health_status: Literal[\"healthy\", \"needs_maintenance\", \"high_risk\", \"unknown\"] = \"unknown\""],
+          ["add", "+129", "    capability_coverage: List[TestAssetCapabilityCoverage] = Field(default_factory=list)"],
+          ["add", "+130", "    test_files: List[TestAssetFile] = Field(default_factory=list)"],
+          ["context", "207", "class OverviewResponse(BaseModel):"],
+          ["add", "+216", "    test_asset_summary: TestAssetSummary = TestAssetSummary()"],
+        ],
+        meaningMain: "它不是普通字段追加，而是新增一个“测试资产治理”的 API 子模型。",
+        meaning: [
+          ["green", "用户能看到测试覆盖了哪些业务能力和代码路径。"],
+          ["amber", "前端需要兼容旧 snapshot 没有该字段的情况。"],
+          ["amber", "字段是 additive，旧调用方不会因为响应多字段而破坏。"],
+          ["red", "如果 coverage_status 算错，会误导用户保留或淘汰测试。"],
+        ],
+        flow: [["overview.py", "定义 TestAssetSummary"], ["OverviewPage", "展示测试资产健康卡"]],
+        risks: [
+          ["amber", "API 增加字段后，旧 snapshot 可能没有 `test_asset_summary`，前端需兼容空值。"],
+          ["green", "新增字段不改变旧字段语义，属于 additive contract。"],
+          ["amber", "测试资产重复度还未接 Graphify，需要后续增强。"],
+        ],
+        review: ["先看 schema 和 TS type，确认 API 契约。", "再看 builder 规则是否保守。", "最后看首页卡片是否按开发者阅读顺序展示。"],
+      },
+      "frontend/src/types/api.ts": {
+        badge: ["medium", "需要 review"],
+        title: "当前文件：frontend/src/types/api.ts",
+        lead: "这个文件把后端新增的测试资产模型翻译成前端可消费的 TS contract。",
+        entrypoints: [
+          ["frontend/src/types/api.ts", "TS contract"],
+          ["backend/app/schemas/overview.py", "API schema"],
+          ["TestAssetSummaryCard", "消费字段"],
+        ],
+        tags: ["类型兼容", "旧 snapshot", "首页卡片数据源"],
+        core: "核心意义是降低前端误用字段的概率，并让首页能稳定读取测试资产治理数据。",
+        diffTitle: "diff 摘要 · frontend/src/types/api.ts",
+        diffBadge: ["medium", "+35 lines · typed contract"],
+        diffLines: [
+          ["add", "+42", "export interface TestAssetCapabilityCoverage {"],
+          ["add", "+43", "  capability_key: string"],
+          ["add", "+44", "  business_capability: string"],
+          ["add", "+45", "  coverage_status: 'covered' | 'partial' | 'missing' | 'unknown'"],
+          ["add", "+49", "  covered_paths: string[]"],
+          ["add", "+50", "  covering_tests: string[]"],
+          ["add", "+64", "export interface TestAssetSummary {"],
+          ["add", "+65", "  health_status: 'healthy' | 'needs_maintenance' | 'high_risk' | 'unknown'"],
+          ["add", "+73", "  capability_coverage: TestAssetCapabilityCoverage[]"],
+          ["add", "+74", "  test_files: TestAssetFile[]"],
+          ["add", "+151", "  test_asset_summary?: TestAssetSummary"],
+        ],
+        meaningMain: "它把 API 新字段变成前端明确契约，而不是让组件靠 any 猜结构。",
+        meaning: [
+          ["green", "组件可以按业务能力、路径、测试文件三个层级展示测试资产。"],
+          ["amber", "字段最好保持可选或有 fallback，避免旧数据直接把页面打挂。"],
+          ["red", "如果 TS contract 和后端 schema 漂移，首页会显示错误的测试状态。"],
+        ],
+        flow: [["api.ts", "定义 TestAssetSummary 类型"], ["TestAssetSummaryCard", "按类型渲染"]],
+        risks: [
+          ["amber", "旧 snapshot 可能没有新字段，类型层需要表达 optional 或组件兜底。"],
+          ["green", "类型字段和后端同名，review 时容易逐项对齐。"],
+          ["red", "状态枚举不一致会导致 badge 和风险判断错误。"],
+        ],
+        review: ["对齐后端 Literal 枚举。", "确认 OverviewResponse 的新字段是否兼容旧数据。", "检查卡片是否只依赖类型中存在的字段。"],
+      },
+      "backend/app/services/overview_inference/test_asset_summary.py": {
+        badge: ["high", "核心逻辑"],
+        title: "当前文件：backend/app/services/overview_inference/test_asset_summary.py",
+        lead: "这个文件不是展示层，而是把变更文件、验证证据和能力映射汇总成测试资产健康事实。",
+        entrypoints: [
+          ["TestAssetSummaryBuilder.build()", "规则入口"],
+          ["verification_status", "证据来源"],
+          ["change_risk_summary.coverage", "覆盖缺口"],
+        ],
+        tags: ["规则事实", "测试维护", "覆盖缺口"],
+        core: "核心意义是先用规则给出可信事实，再让 Agent 只做业务影响和风险归纳。",
+        diffTitle: "diff 摘要 · test_asset_summary.py",
+        diffBadge: ["high", "new file · rule engine"],
+        diffLines: [
+          ["add", "+8", "class TestAssetSummaryBuilder:"],
+          ["add", "+12", "    def build(self, *, change_data, verification_data, capability_map):"],
+          ["add", "+19", "        changed_test_files = [path for path in changed_files if self._is_test_path(path)]"],
+          ["add", "+22", "        coverage_gaps = list(verification_data.get(\"missing_tests_for_changed_paths\", []))"],
+          ["add", "+36", "        stale_or_invalid_test_count = sum(... maintenance_status in {\"update\", \"retire\"})"],
+          ["add", "+47", "            \"recommended_actions\": self._recommended_actions(...)"],
+          ["add", "+132", "            if coverage_gaps: invalidation_reasons.append(...)"],
+        ],
+        meaningMain: "它把“测试文件是否还值得保留”从主观判断变成可解释的规则事实。",
+        meaning: [
+          ["green", "先用规则计算覆盖缺口和维护状态，避免 Agent 直接拍脑袋。"],
+          ["amber", "能把测试文件反向关联到业务能力、技术入口和被测路径。"],
+          ["red", "当前重复/低价值测试还没有语义去重，只能显示为后续增强项。"],
+        ],
+        flow: [["TestAssetSummaryBuilder", "规则聚合"], ["GET /api/overview", "输出测试资产摘要"]],
+        risks: [
+          ["red", "规则误判会直接影响用户是否保留或淘汰测试。"],
+          ["amber", "缺少 Graphify 级别的语义去重，重复测试只能弱判断。"],
+          ["green", "输入来自规则事实，fallback 时仍可展示。"],
+        ],
+        review: ["先看输入事实是否完整。", "再看 coverage_gaps 和 affected_tests 的组合规则。", "最后看推荐动作是否过度断言。"],
+      },
+      "frontend/src/components/cards/TestAssetSummaryCard.tsx": {
+        badge: ["medium", "用户可见"],
+        title: "当前文件：frontend/src/components/cards/TestAssetSummaryCard.tsx",
+        lead: "这个文件把测试资产规则事实变成首页用户能读懂的卡片。",
+        entrypoints: [
+          ["TestAssetSummaryCard", "展示入口"],
+          ["test_asset_summary", "数据源"],
+          ["OverviewPage", "首页挂载"],
+        ],
+        tags: ["测试资产健康", "覆盖路径", "维护建议"],
+        core: "核心意义是让用户不用读测试文件，就能知道测试覆盖了哪些路径、哪些测试可能已经失效。",
+        diffTitle: "diff 摘要 · TestAssetSummaryCard.tsx",
+        diffBadge: ["medium", "new card · user-facing"],
+        diffLines: [
+          ["add", "+15", "export function TestAssetSummaryCard({ summary, loading }: Props) {"],
+          ["add", "+34", "  const status = summary.health_status"],
+          ["add", "+58", "  summary.capability_coverage.map(item => ...)"],
+          ["add", "+82", "  summary.test_files.map(test => ...)"],
+          ["add", "+104", "  summary.recommended_actions.map(action => ...)"],
+        ],
+        meaningMain: "它负责把规则事实翻译成开发者能行动的 UI，不应该只是罗列测试文件。",
+        meaning: [
+          ["green", "按业务能力和被测路径组织测试信息，比测试文件清单更有体感。"],
+          ["amber", "空数据和旧 snapshot 必须显示可理解的空状态。"],
+          ["red", "如果排序不清楚，AI 生成的大量测试会继续让用户看不懂。"],
+        ],
+        flow: [["test_asset_summary", "规则事实"], ["TestAssetSummaryCard", "健康、覆盖、维护建议"]],
+        risks: [
+          ["amber", "卡片需要避免把未知状态说成已覆盖。"],
+          ["green", "展示结构和规则字段一一对应，便于 review。"],
+          ["red", "如果只按测试文件展示，会回到信息堆叠问题。"],
+        ],
+        review: ["先看卡片首屏结论。", "再看能力覆盖和测试文件维护建议。", "最后验证空状态和 unknown 状态。"],
+      },
+      "backend/tests/test_overview_inference.py": {
+        badge: ["low", "测试资产"],
+        title: "当前文件：backend/tests/test_overview_inference.py",
+        lead: "这个文件验证 overview 推理输出是否包含新的风险、覆盖和测试资产字段。",
+        entrypoints: [
+          ["backend/tests/test_overview_inference.py", "后端规则测试"],
+          ["GET /api/overview", "被验证输出"],
+          ["TestAssetSummaryBuilder", "规则对象"],
+        ],
+        tags: ["契约回归", "规则覆盖", "测试资产自管理"],
+        core: "它本身也是测试资产，需要说明覆盖了哪些路径，以及未来是否可能因实现变化失效。",
+        diffTitle: "diff 摘要 · test_overview_inference.py",
+        diffBadge: ["low", "+107 lines · regression tests"],
+        diffLines: [
+          ["add", "+31", "def test_overview_includes_change_risk_summary(...):"],
+          ["add", "+58", "def test_test_asset_summary_reports_covered_paths(...):"],
+          ["add", "+93", "def test_agent_failure_keeps_rule_based_summary(...):"],
+          ["add", "+118", "assert overview.test_asset_summary.health_status == \"healthy\""],
+        ],
+        meaningMain: "它验证新增规则字段不是只在 happy path 出现，也要在 Agent fallback 时可用。",
+        meaning: [
+          ["green", "覆盖 API 契约和规则 fallback。"],
+          ["amber", "如果规则字段继续扩展，测试需要同步维护。"],
+          ["red", "如果测试只断言字段存在，不断言含义，就会变成低价值测试。"],
+        ],
+        flow: [["test_overview_inference.py", "回归测试"], ["overview response", "契约稳定"]],
+        risks: [
+          ["green", "这是本次变更的直接保护网。"],
+          ["amber", "需要避免过度绑定实现细节。"],
+          ["red", "如果业务含义变了但断言没变，测试会提供虚假安全感。"],
+        ],
+        review: ["确认断言覆盖字段含义。", "检查 fallback 分支。", "删除只验证 shape 的低价值断言。"],
+      },
+      "frontend/src/pages/OverviewPage.tsx": {
+        badge: ["medium", "首页入口"],
+        title: "当前文件：frontend/src/pages/OverviewPage.tsx",
+        lead: "这个文件决定用户在首页先看到什么，因此它改变的是阅读顺序而不只是挂载一个组件。",
+        entrypoints: [
+          ["OverviewPage", "首页布局"],
+          ["ChangeRiskSummaryCard", "顶部结论"],
+          ["TestAssetSummaryCard", "测试资产入口"],
+        ],
+        tags: ["首页信息架构", "结论先行", "项目结构视角"],
+        core: "核心意义是把用户最关心的风险、测试覆盖、已有功能影响放到同一个 overview 输出里展示。",
+        diffTitle: "diff 摘要 · OverviewPage.tsx",
+        diffBadge: ["medium", "+6 lines · card mount"],
+        diffLines: [
+          ["add", "+7", "import { TestAssetSummaryCard } from '../components/cards/TestAssetSummaryCard'"],
+          ["add", "+8", "import { ProjectStructureChangeCard } from '../components/cards/ProjectStructureChangeCard'"],
+          ["add", "+144", "<TestAssetSummaryCard summary={overview?.test_asset_summary ?? null} />"],
+          ["add", "+150", "<ProjectStructureChangeCard changes={overview?.recent_ai_changes ?? []} />"],
+        ],
+        meaningMain: "它把后端规则事实推到首页主阅读路径，避免用户去多张卡片里拼结论。",
+        meaning: [
+          ["green", "用户先看到风险和测试资产，再按项目结构钻文件。"],
+          ["amber", "卡片顺序会影响用户 review 的优先级。"],
+          ["red", "如果首页过载，项目结构卡会被淹没，需要控制信息密度。"],
+        ],
+        flow: [["GET /api/overview", "单一输出"], ["OverviewPage", "按阅读顺序展示"]],
+        risks: [
+          ["amber", "布局顺序变化可能影响已有用户习惯。"],
+          ["green", "数据仍来自单一 overview 输出，没有新增前端拼装接口。"],
+          ["red", "如果 loading/fallback 不一致，顶部结论和项目结构会互相矛盾。"],
+        ],
+        review: ["先看首屏卡片顺序。", "再看 loading 和空态。", "最后看是否能从文件跳到测试证据。"],
+      },
+    };
+
+    const fallbackDetail = fileDetails["backend/app/schemas/overview.py"];
+    const nodes = document.querySelectorAll("[data-file]");
+
+    function genericDetail(file) {
+      const isTest = file.includes("test") || file.includes("__tests__");
+      const isFrontend = file.startsWith("frontend/");
+      const isDocs = file.startsWith("docs/");
+      const label = isTest ? "测试资产" : isFrontend ? "前端展示" : isDocs ? "UX 文档" : "内部模块";
+      return {
+        badge: [isTest ? "low" : "medium", label],
+        title: `当前文件：${file}`,
+        lead: "这个文件当前只展示基础文件级解释；真实产品里应由 diff 摘要、规则事实和 Agent 归纳共同生成。",
+        entrypoints: [
+          [file, label],
+          ["GET /api/overview", "关联 overview 输出"],
+          ["ProjectStructureChangeCard", "文件结构视图"],
+        ],
+        tags: [label, "文件级 diff", "待补充专属解释"],
+        core: "这条兜底说明的重点是：即使没有专属归纳，也不能让用户看到与当前文件无关的解释。",
+        diffTitle: `diff 摘要 · ${file}`,
+        diffBadge: [isTest ? "low" : "medium", "pending · file-specific summary"],
+        diffLines: [
+          ["context", "…", "专属 diff 摘要待由规则层从 git diff / file diff API 生成"],
+          ["add", "+", `${file}`],
+          ["context", "…", "这里不应复用其他文件的解释"],
+        ],
+        meaningMain: "当前文件需要展示自己的 diff 意义，而不是复用上一个文件的产品解释。",
+        meaning: [
+          ["green", "文件路径、类型和入口至少必须随选择变化。"],
+          ["amber", "专属业务意义需要 Agent 基于规则事实归纳。"],
+          ["red", "如果复用其他文件解释，会误导 review 顺序。"],
+        ],
+        flow: [[file.split("/").pop() || file, label], ["Review", "确认该文件的真实影响"]],
+        risks: [
+          ["amber", "该文件缺少专属 diff 摘要。"],
+          ["amber", "需要补齐业务能力、技术入口和测试证据映射。"],
+          ["green", "当前 UI 已避免显示错误文件的旧解释。"],
+        ],
+        review: ["先确认该文件是否属于本次核心路径。", "补齐专属 diff 摘要。", "再判断是否需要测试或文档维护。"],
+      };
+    }
+
+    function esc(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    function dotClass(color) {
+      if (color === "green") return "risk-dot green";
+      if (color === "red") return "risk-dot red";
+      return "risk-dot";
+    }
+
+    function renderPathRows(rows) {
+      return rows.map(([path, label]) => `<div class="path-row"><code>${esc(path)}</code><span>${esc(label)}</span></div>`).join("");
+    }
+
+    function renderTags(tags) {
+      return tags.map(tag => `<span class="tag">${esc(tag)}</span>`).join("");
+    }
+
+    function renderDiffLines(lines) {
+      return lines.map(([type, no, text]) => `<div class="diff-line ${esc(type)}"><span class="line-no">${esc(no)}</span><span>${esc(text)}</span></div>`).join("");
+    }
+
+    function renderMeaning(items) {
+      return items.map(([color, text]) => `<div><span class="${dotClass(color)}"></span><span>${esc(text)}</span></div>`).join("");
+    }
+
+    function renderRisks(items) {
+      return items.map(([color, text]) => `<div class="risk-item"><span class="${dotClass(color)}"></span><span>${esc(text)}</span></div>`).join("");
+    }
+
+    function renderReview(items) {
+      return items.map((item, index) => `${index + 1}. ${esc(item)}`).join("<br />");
+    }
+
+    function renderFlow(flow) {
+      return `
+        <div class="node"><code>${esc(flow[0][0])}</code><br />${esc(flow[0][1])}</div>
+        <div class="arrow">→</div>
+        <div class="node"><code>${esc(flow[1][0])}</code><br />${esc(flow[1][1])}</div>
+      `;
+    }
+
+    function selectFile(file) {
+      const detail = fileDetails[file] || genericDetail(file) || fallbackDetail;
+      nodes.forEach(node => node.classList.toggle("active", node.dataset.file === file));
+
+      document.getElementById("selected-title").textContent = detail.title;
+      document.getElementById("selected-lead").textContent = detail.lead;
+
+      const badge = document.getElementById("selected-badge");
+      badge.className = `badge ${detail.badge[0]}`;
+      badge.textContent = detail.badge[1];
+
+      document.getElementById("selected-entrypoints").innerHTML = renderPathRows(detail.entrypoints);
+      document.getElementById("selected-tags").innerHTML = renderTags(detail.tags);
+      document.getElementById("selected-core").textContent = detail.core;
+      document.getElementById("selected-diff-title").textContent = detail.diffTitle;
+
+      const diffBadge = document.getElementById("selected-diff-badge");
+      diffBadge.className = `badge ${detail.diffBadge[0]}`;
+      diffBadge.textContent = detail.diffBadge[1];
+
+      document.getElementById("selected-diff-lines").innerHTML = renderDiffLines(detail.diffLines);
+      document.getElementById("selected-meaning-main").textContent = detail.meaningMain;
+      document.getElementById("selected-meaning-list").innerHTML = renderMeaning(detail.meaning);
+      document.getElementById("selected-flow").innerHTML = renderFlow(detail.flow);
+      document.getElementById("selected-risks").innerHTML = renderRisks(detail.risks);
+      document.getElementById("selected-review-order").innerHTML = renderReview(detail.review);
+    }
+
+    nodes.forEach(node => {
+      node.addEventListener("click", () => selectFile(node.dataset.file));
+      node.addEventListener("keydown", event => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          selectFile(node.dataset.file);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

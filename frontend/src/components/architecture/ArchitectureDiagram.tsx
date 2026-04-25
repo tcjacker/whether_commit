@@ -1,5 +1,6 @@
 import { useMemo, useRef, useEffect, useState } from 'react'
 import type { ArchitectureNode, ArchitectureEdge } from '../../types/api'
+import { zhNodeType } from '../../i18n'
 
 interface Props {
   nodes: ArchitectureNode[]
@@ -173,7 +174,7 @@ export function ArchitectureDiagram({ nodes, edges, highlightedNodeIds, height =
                 fontSize={9}
                 fontFamily="system-ui, sans-serif"
               >
-                {p.type}
+                {zhNodeType(p.type)}
               </text>
             </g>
           )

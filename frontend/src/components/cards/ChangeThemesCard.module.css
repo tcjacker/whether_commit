@@ -1,0 +1,139 @@
+.list { display: flex; flex-direction: column; gap: 8px; }
+
+.item {
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: border-color 0.15s, opacity 0.2s, background 0.15s;
+  background: transparent;
+}
+.item:hover { border-color: var(--accent); background: rgba(124,58,237,0.05); }
+.selected { border-color: var(--accent-light) !important; background: rgba(124,58,237,0.1) !important; }
+.dimmed { opacity: 0.25; pointer-events: none; }
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.titleGroup {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.key {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: ui-monospace, monospace;
+  flex-shrink: 0;
+}
+
+.metaPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pill {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(124,58,237,0.12);
+  color: var(--accent-light);
+}
+
+.summary {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  background: rgba(139,148,158,0.15);
+  color: var(--text-muted);
+  border-radius: 8px;
+  text-transform: none;
+}
+
+.detail {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detailRow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.detailLabel {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.detailValue {
+  font-size: 11px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.detailActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.reviewLink {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(167, 139, 250, 0.35);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: var(--accent-light);
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(124,58,237,0.08);
+}
+
+.reviewLink:hover {
+  color: #c4b5fd;
+  border-color: rgba(167, 139, 250, 0.65);
+}
+
+.fallbackNote {
+  font-size: 11px;
+  color: #d29922;
+  background: rgba(210,153,34,0.10);
+  border: 1px solid rgba(210,153,34,0.25);
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+}
