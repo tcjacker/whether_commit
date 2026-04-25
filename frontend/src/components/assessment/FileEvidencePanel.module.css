@@ -5,6 +5,65 @@
   padding: 14px;
 }
 
+.agentBadge,
+.fallbackBadge {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 14px;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #f9fafb;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  margin-top: 4px;
+  border: 2px solid #bfdbfe;
+  border-top-color: #2563eb;
+  border-radius: 999px;
+  animation: spin 900ms linear infinite;
+}
+
+.runButton {
+  width: fit-content;
+  margin-top: 6px;
+  padding: 5px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 12px;
+}
+
+.runButton:hover {
+  background: #f3f4f6;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.agentBadge {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.agentBadge strong,
+.fallbackBadge strong {
+  color: #111827;
+  font-size: 12px;
+}
+
+.agentBadge span,
+.fallbackBadge span {
+  color: #6b7280;
+  font-size: 11px;
+}
+
 .panel section {
   padding: 0 0 14px;
   margin: 0 0 14px;
@@ -21,4 +80,38 @@
   color: #4b5563;
   font-size: 13px;
   line-height: 1.45;
+}
+
+.meta {
+  color: #6b7280 !important;
+  font-size: 12px !important;
+}
+
+.evidenceList {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.evidenceList li {
+  display: grid;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #f9fafb;
+}
+
+.evidenceList span {
+  overflow: hidden;
+  color: #111827;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.evidenceList small {
+  color: #6b7280;
+  font-size: 11px;
 }

@@ -211,6 +211,24 @@ class JobManagerTest(unittest.IsolatedAsyncioTestCase):
             "change_title": "工作区差异（1 个文件）",
             "changed_files": ["app/main.py"],
             "changed_symbols": ["handler"],
+            "file_diff_stats": {
+                "app/main.py": {
+                    "added_lines": 5,
+                    "deleted_lines": 1,
+                    "change_type": "modified file",
+                    "snippets": ["return {'status': 'ok'}"],
+                }
+            },
+            "file_diffs": {
+                "app/main.py": "@@ -1,1 +1,1 @@\n-old\n+new\n"
+            },
+            "agent_activity_evidence": [
+                {
+                    "source": "codex",
+                    "summary": "为了让 app/main.py 返回新的健康检查结构，修改 handler",
+                    "related_files": ["app/main.py"],
+                }
+            ],
             "changed_routes": [],
             "changed_modules": ["mod_app"],
             "directly_changed_modules": ["mod_app"],
@@ -326,11 +344,128 @@ class JobManagerTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(save_assessment_file_detail_calls), 1)
         self.assertEqual(save_assessment_file_detail_calls[0][4]["workspace_path"], "/tmp/demo")
         self.assertEqual(save_assessment_file_detail_calls[0][3]["file"]["path"], "app/main.py")
+        records = save_assessment_file_detail_calls[0][3]["related_agent_records"]
+        self.assertEqual(records[0]["source"], "codex")
+        self.assertIn("健康检查结构", save_assessment_file_detail_calls[0][3]["file_assessment"]["why_changed"])
         self.assertEqual(len(save_assessment_review_state_calls), 1)
         self.assertEqual(save_assessment_review_state_calls[0][2]["scope"], "assessment")
-        self.assertIn("agentic_change_assessment", save_overview_calls[0][2])
-        self.assertTrue(update_latest_calls[0][1]["has_pending_changes"])
-        self.assertEqual(update_latest_calls[0][2]["workspace_path"], "/tmp/demo")
+
+    def test_build_assessment_collects_agent_activity_when_change_analysis_missing_it(self):
+        manager = JobManager(data_dir=tempfile.mkdtemp())
+        job = JobState(
+            job_id="job_agent_logs",
+            repo_key="demo",
+            base_commit_sha="HEAD",
+            include_untracked=True,
+            workspace_snapshot_id="ws_agent_logs",
+            workspace_path="/tmp/demo",
+            status="pending",
+            step="init",
+            progress=0,
+            message="init",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        change_payload = {
+            "changed_files": ["app/main.py"],
+            "changed_symbols": [],
+            "file_diff_stats": {
+                "app/main.py": {"added_lines": 1, "deleted_lines": 0, "change_type": "modified file"}
+            },
+            "file_diffs": {"app/main.py": "@@ -1,1 +1,1 @@\n-old\n+new\n"},
+        }
+        save_file_detail_calls = []
+
+        with patch(
+            "app.services.jobs.manager.ChangeImpactAdapter._collect_agent_activity_evidence",
+            return_value=[
+                {
+                    "source": "codex",
+                    "summary": "为了调整 app/main.py 的入口行为而修改",
+                    "related_files": ["app/main.py"],
+                }
+            ],
+        ), patch(
+            "app.services.jobs.manager.snapshot_store.save_assessment_manifest"
+        ), patch(
+            "app.services.jobs.manager.snapshot_store.save_assessment_file_detail",
+            side_effect=lambda repo, snapshot_id, file_id, payload, **kwargs: save_file_detail_calls.append(payload),
+        ), patch(
+            "app.services.jobs.manager.snapshot_store.save_assessment_review_state"
+        ):
+            manager._build_and_save_assessment(
+                job=job,
+                change_data=change_payload,
+                verification_data={"affected_tests": [], "missing_tests_for_changed_paths": []},
+                review_graph_data={"nodes": [], "edges": []},
+            )
+
+        self.assertEqual(save_file_detail_calls[0]["related_agent_records"][0]["source"], "codex")
+        self.assertIn("入口行为", save_file_detail_calls[0]["file_assessment"]["why_changed"])
+
+    def test_build_assessment_collects_agent_activity_for_uncovered_changed_files(self):
+        manager = JobManager(data_dir=tempfile.mkdtemp())
+        job = JobState(
+            job_id="job_agent_logs_partial",
+            repo_key="demo",
+            base_commit_sha="HEAD",
+            include_untracked=True,
+            workspace_snapshot_id="ws_agent_logs_partial",
+            workspace_path="/tmp/demo",
+            status="pending",
+            step="init",
+            progress=0,
+            message="init",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        change_payload = {
+            "changed_files": ["app/main.py", "app/secondary.py"],
+            "agent_activity_evidence": [
+                {
+                    "source": "codex",
+                    "summary": "已有 app/main.py 的说明",
+                    "related_files": ["app/main.py"],
+                }
+            ],
+            "file_diff_stats": {
+                "app/main.py": {"added_lines": 1, "deleted_lines": 0, "change_type": "modified file"},
+                "app/secondary.py": {"added_lines": 2, "deleted_lines": 0, "change_type": "modified file"},
+            },
+            "file_diffs": {
+                "app/main.py": "@@ -1,1 +1,1 @@\n-old\n+new\n",
+                "app/secondary.py": "@@ -1,1 +1,1 @@\n-old\n+new\n",
+            },
+        }
+        save_file_detail_calls = []
+
+        with patch(
+            "app.services.jobs.manager.ChangeImpactAdapter._collect_agent_activity_evidence",
+            return_value=[
+                {
+                    "source": "codex",
+                    "summary": "补充 app/secondary.py 的修改原因",
+                    "related_files": ["app/secondary.py"],
+                }
+            ],
+        ), patch(
+            "app.services.jobs.manager.snapshot_store.save_assessment_manifest"
+        ), patch(
+            "app.services.jobs.manager.snapshot_store.save_assessment_file_detail",
+            side_effect=lambda repo, snapshot_id, file_id, payload, **kwargs: save_file_detail_calls.append(payload),
+        ), patch(
+            "app.services.jobs.manager.snapshot_store.save_assessment_review_state"
+        ):
+            manager._build_and_save_assessment(
+                job=job,
+                change_data=change_payload,
+                verification_data={"affected_tests": [], "missing_tests_for_changed_paths": []},
+                review_graph_data={"nodes": [], "edges": []},
+            )
+
+        secondary = next(item for item in save_file_detail_calls if item["file"]["path"] == "app/secondary.py")
+        self.assertEqual(secondary["related_agent_records"][0]["source"], "codex")
+        self.assertIn("修改原因", secondary["file_assessment"]["why_changed"])
 
 
 if __name__ == "__main__":

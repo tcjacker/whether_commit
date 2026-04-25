@@ -1,4 +1,4 @@
-import { get } from './client'
+import { get, post } from './client'
 import type { AssessmentManifest, ChangedFileDetail, ChangedFileSummary } from '../types/api'
 
 export function fetchLatestAssessment(repoKey: string, workspacePath?: string): Promise<AssessmentManifest> {
@@ -26,4 +26,17 @@ export function fetchAssessmentFileDetail(
   const params = new URLSearchParams({ repo_key: repoKey })
   if (workspacePath?.trim()) params.set('workspace_path', workspacePath.trim())
   return get<ChangedFileDetail>(`/api/assessments/${assessmentId}/files/${fileId}?${params}`)
+}
+
+export function triggerFileAgentAssessment(
+  repoKey: string,
+  assessmentId: string,
+  fileId: string,
+  workspacePath?: string,
+  language = 'zh-CN',
+): Promise<ChangedFileDetail> {
+  const params = new URLSearchParams({ repo_key: repoKey })
+  if (workspacePath?.trim()) params.set('workspace_path', workspacePath.trim())
+  params.set('language', language)
+  return post<ChangedFileDetail>(`/api/assessments/${assessmentId}/files/${fileId}/agent-assessment?${params}`, {})
 }

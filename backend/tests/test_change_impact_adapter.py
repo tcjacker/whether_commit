@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -172,6 +173,43 @@ class ChangeImpactAdapterTest(unittest.TestCase):
         self.assertTrue(any("return {'ok': True, 'tests': 3}" in snippet for snippet in stats["snippets"]))
         self.assertIn("@@ -1,3 +1,4 @@", result["file_diffs"]["app/main.py"])
 
+    def test_generate_change_analysis_includes_codex_conversation_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            os.mkdir(os.path.join(tmp_dir, ".git"))
+            adapter = ChangeImpactAdapter(workspace_path=tmp_dir)
+            adapter._git_status_lines = lambda: [" M app/main.py"]
+            adapter._load_graph_snapshot = lambda: {"modules": [], "dependencies": []}
+            adapter._git_diff_for_file = lambda _file_path, staged=False: ""
+            adapter._last_commit_timestamp = lambda: 1777111200
+            adapter._collect_agent_activity_evidence = lambda _changed_files: []
+            adapter._collect_codex_conversation_evidence = lambda since_timestamp: {
+                "source": "codex_session_jsonl",
+                "capture_level": "partial",
+                "session_count": 1,
+                "message_count": 2,
+                "session_ids": ["sess_1"],
+                "user_messages": ["用户要求从 Codex session JSONL 总结本轮设计目标。"],
+                "assistant_messages": ["Codex 接入 reader 并写入 manifest summary。"],
+                "source_paths": ["/tmp/rollout.jsonl"],
+                "seen_since_timestamp": since_timestamp,
+            }
+            adapter._extract_changed_python_facts = lambda _file_path, _status: {
+                "symbols": [],
+                "functions": [],
+                "classes": [],
+                "routes": [],
+                "changed_schemas": [],
+                "changed_jobs": [],
+                "affected_data_objects": [],
+            }
+
+            result = adapter.generate_change_analysis("ws_codex_sessions")
+
+        evidence = result["codex_conversation_evidence"]
+        self.assertEqual(evidence["source"], "codex_session_jsonl")
+        self.assertEqual(evidence["seen_since_timestamp"], 1777111200)
+        self.assertIn("设计目标", evidence["user_messages"][0])
+
     def test_generate_change_analysis_includes_parseable_diff_for_untracked_file(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             os.mkdir(os.path.join(tmp_dir, ".git"))
@@ -229,6 +267,271 @@ class ChangeImpactAdapterTest(unittest.TestCase):
         self.assertEqual(evidence[0]["source"], "codex")
         self.assertEqual(evidence[0]["related_files"], ["app/main.py"])
         self.assertIn("Agent 归纳", evidence[0]["summary"])
+
+    def test_generate_change_analysis_collects_codex_sqlite_activity_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            os.mkdir(os.path.join(tmp_dir, ".git"))
+            sqlite_path = os.path.join(tmp_dir, "logs_2.sqlite")
+            conn = sqlite3.connect(sqlite_path)
+            conn.execute(
+                "create table logs (id integer primary key, ts integer, feedback_log_body text)"
+            )
+            conn.execute(
+                "insert into logs (ts, feedback_log_body) values (?, ?)",
+                (
+                    1,
+                    "实现 backend/app/services/agent_records/agent_log.py，"
+                    "用于把 Codex 日志转成 AgentChangeRecord，解释 Why 的修改原因。",
+                ),
+            )
+            conn.commit()
+            conn.close()
+
+            adapter = ChangeImpactAdapter(workspace_path=tmp_dir)
+            adapter._git_status_lines = lambda: ["?? backend/app/services/agent_records/agent_log.py"]
+            adapter._load_graph_snapshot = lambda: {"modules": [], "dependencies": []}
+            adapter._agent_log_candidates = lambda: [Path(sqlite_path)]
+            adapter._extract_changed_python_facts = lambda _file_path, _status: {
+                "symbols": [],
+                "functions": [],
+                "classes": [],
+                "routes": [],
+                "changed_schemas": [],
+                "changed_jobs": [],
+                "affected_data_objects": [],
+            }
+
+            os.makedirs(os.path.join(tmp_dir, "backend/app/services/agent_records"))
+            with open(os.path.join(tmp_dir, "backend/app/services/agent_records/agent_log.py"), "w", encoding="utf-8") as f:
+                f.write("class AgentLogRecordAdapter:\n")
+                f.write("    pass\n")
+
+            result = adapter.generate_change_analysis("ws_sqlite_logs")
+
+        evidence = result["agent_activity_evidence"]
+        self.assertEqual(evidence[0]["source"], "codex")
+        self.assertEqual(evidence[0]["related_files"], ["backend/app/services/agent_records/agent_log.py"])
+        self.assertIn("AgentChangeRecord", evidence[0]["summary"])
+
+    def test_generate_change_analysis_filters_codex_sqlite_logs_before_last_commit(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            os.mkdir(os.path.join(tmp_dir, ".git"))
+            sqlite_path = os.path.join(tmp_dir, "logs_2.sqlite")
+            conn = sqlite3.connect(sqlite_path)
+            conn.execute(
+                "create table logs (id integer primary key, ts integer, ts_nanos integer, feedback_log_body text)"
+            )
+            conn.execute(
+                "insert into logs (ts, ts_nanos, feedback_log_body) values (?, ?, ?)",
+                (
+                    90,
+                    0,
+                    "旧日志 backend/app/services/agent_records/agent_log.py 不应该进入本轮 summary。",
+                ),
+            )
+            conn.execute(
+                "insert into logs (ts, ts_nanos, feedback_log_body) values (?, ?, ?)",
+                (
+                    110,
+                    0,
+                    "新日志 backend/app/services/agent_records/agent_log.py 应该进入本轮 summary。",
+                ),
+            )
+            conn.commit()
+            conn.close()
+
+            adapter = ChangeImpactAdapter(workspace_path=tmp_dir)
+            adapter._git_status_lines = lambda: ["?? backend/app/services/agent_records/agent_log.py"]
+            adapter._last_commit_timestamp = lambda: 100
+            adapter._load_graph_snapshot = lambda: {"modules": [], "dependencies": []}
+            adapter._agent_log_candidates = lambda: [Path(sqlite_path)]
+            adapter._extract_changed_python_facts = lambda _file_path, _status: {
+                "symbols": [],
+                "functions": [],
+                "classes": [],
+                "routes": [],
+                "changed_schemas": [],
+                "changed_jobs": [],
+                "affected_data_objects": [],
+            }
+
+            os.makedirs(os.path.join(tmp_dir, "backend/app/services/agent_records"))
+            with open(os.path.join(tmp_dir, "backend/app/services/agent_records/agent_log.py"), "w", encoding="utf-8") as f:
+                f.write("class AgentLogRecordAdapter:\n")
+                f.write("    pass\n")
+
+            result = adapter.generate_change_analysis("ws_sqlite_logs")
+
+        evidence = result["agent_activity_evidence"]
+        self.assertEqual(len(evidence), 1)
+        self.assertIn("新日志", evidence[0]["summary"])
+        self.assertNotIn("旧日志", evidence[0]["summary"])
+        self.assertEqual(result["base_commit_timestamp"], 100)
+
+    def test_agent_activity_evidence_matches_full_raw_log_when_summary_is_truncated(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            os.mkdir(os.path.join(tmp_dir, ".git"))
+            log_path = os.path.join(tmp_dir, "history.jsonl")
+            raw_line = (
+                'session_loop{thread_id=abc}: Submission sub=Submission { '
+                'items: [Text { text: "为 assessment builder 增加 Codex 日志关联测试", kind: User }] } '
+                + ("x" * 700)
+                + " backend/tests/test_agentic_change_assessment_builder.py"
+            )
+            with open(log_path, "w", encoding="utf-8") as f:
+                f.write(raw_line + "\n")
+
+            adapter = ChangeImpactAdapter(workspace_path=tmp_dir)
+            adapter._git_status_lines = lambda: [" M backend/tests/test_agentic_change_assessment_builder.py"]
+            adapter._load_graph_snapshot = lambda: {"modules": [], "dependencies": []}
+            adapter._git_diff_for_file = lambda _file_path, staged=False: ""
+            adapter._agent_log_candidates = lambda: [Path(log_path)]
+            adapter._extract_changed_python_facts = lambda _file_path, _status: {
+                "symbols": [],
+                "functions": [],
+                "classes": [],
+                "routes": [],
+                "changed_schemas": [],
+                "changed_jobs": [],
+                "affected_data_objects": [],
+            }
+
+            result = adapter.generate_change_analysis("ws_long_codex_log")
+
+        evidence = result["agent_activity_evidence"]
+        self.assertEqual(evidence[0]["source"], "codex")
+        self.assertEqual(evidence[0]["related_files"], ["backend/tests/test_agentic_change_assessment_builder.py"])
+        self.assertIn("Codex 日志关联测试", evidence[0]["summary"])
+
+    def test_agent_activity_evidence_filters_raw_codex_telemetry_summaries(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            os.mkdir(os.path.join(tmp_dir, ".git"))
+            log_path = os.path.join(tmp_dir, "history.jsonl")
+            with open(log_path, "w", encoding="utf-8") as f:
+                f.write(
+                    "session_loop{thread_id=abc}:submission_dispatch{otel.name=\"op.dispatch.user_turn\"} "
+                    "backend/tests/test_agentic_change_assessment_builder.py\n"
+                )
+                f.write(
+                    "The following is the Codex agent history whose request action you are assessing. "
+                    "backend/tests/test_agentic_change_assessment_builder.py\n"
+                )
+                f.write(
+                    "Received message {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"function_call\"}} "
+                    "backend/tests/test_agentic_change_assessment_builder.py\n"
+                )
+                f.write(
+                    'session_loop{thread_id=abc}: Submission sub=Submission { items: [Text { text: ">>> TRANSCRIPT START", '
+                    'kind: User }, Text { text: ">>> TRANSCRIPT DELTA START", kind: User }] } '
+                    "backend/tests/test_agentic_change_assessment_builder.py\n"
+                )
+                f.write(
+                    'session_loop{thread_id=abc}: Submission sub=Submission { items: [Text { text: ">>> TRANSCRIPT END", '
+                    'kind: User }, Text { text: ">>> TRANSCRIPT DELTA END", kind: User }] } '
+                    "backend/tests/test_agentic_change_assessment_builder.py\n"
+                )
+                f.write(
+                    '{"text":"You are a helpful assistant. You will be presented with a user prompt, and your job is to provide a short title for a task."} '
+                    "backend/tests/test_agentic_change_assessment_builder.py\n"
+                )
+                f.write(
+                    '{"text":"The Codex agent has requested the following action:"} '
+                    "backend/tests/test_agentic_change_assessment_builder.py\n"
+                )
+                f.write(
+                    '{"text":"Assess the exact planned action below. Use read-only tool checks when local state matters."} '
+                    "backend/tests/test_agentic_change_assessment_builder.py\n"
+                )
+                f.write(
+                    '{"text":"Planned action JSON:"} '
+                    "backend/tests/test_agentic_change_assessment_builder.py\n"
+                )
+                f.write(
+                    '{"text":"{ \\"command\\": [\\"/bin/zsh\\", \\"-lc\\", \\"pytest\\"], '
+                    '\\"cwd\\": \\"/tmp\\", \\"justification\\": \\"approval wrapper\\" }"} '
+                    "backend/tests/test_agentic_change_assessment_builder.py\n"
+                )
+                f.write(
+                    '{"text":">>> APPROVAL REQUEST START"} '
+                    "backend/tests/test_agentic_change_assessment_builder.py\n"
+                )
+                f.write(
+                    '{"text":"[858] tool exec_command result: backend/tests/test_agentic_change_assessment_builder.py pytest output"}\n'
+                )
+                f.write(
+                    '{"text":"\\\\n[908] tool write_stdin result: backend/tests/test_agentic_change_assessment_builder.py vite output"}\n'
+                )
+                f.write(
+                    '{"text":"[794] user: 下面可以接入 Agent 了吗"} '
+                    "backend/tests/test_agentic_change_assessment_builder.py\n"
+                )
+                f.write(
+                    '{"text":"为 backend/tests/test_agentic_change_assessment_builder.py 增加 builder 评估回归测试，验证 codex evidence 会进入 Why。"}\n'
+                )
+
+            adapter = ChangeImpactAdapter(workspace_path=tmp_dir)
+            adapter._git_status_lines = lambda: [" M backend/tests/test_agentic_change_assessment_builder.py"]
+            adapter._load_graph_snapshot = lambda: {"modules": [], "dependencies": []}
+            adapter._git_diff_for_file = lambda _file_path, staged=False: ""
+            adapter._agent_log_candidates = lambda: [Path(log_path)]
+            adapter._extract_changed_python_facts = lambda _file_path, _status: {
+                "symbols": [],
+                "functions": [],
+                "classes": [],
+                "routes": [],
+                "changed_schemas": [],
+                "changed_jobs": [],
+                "affected_data_objects": [],
+            }
+
+            result = adapter.generate_change_analysis("ws_clean_logs")
+
+        evidence = result["agent_activity_evidence"]
+        self.assertEqual(len(evidence), 1)
+        self.assertEqual(evidence[0]["related_files"], ["backend/tests/test_agentic_change_assessment_builder.py"])
+        self.assertIn("builder 评估回归测试", evidence[0]["summary"])
+        self.assertNotIn("session_loop", evidence[0]["summary"])
+        self.assertNotIn("The following is the Codex agent history", evidence[0]["summary"])
+        self.assertNotIn("response.output_item.done", evidence[0]["summary"])
+        self.assertNotIn("TRANSCRIPT START", evidence[0]["summary"])
+        self.assertNotIn("TRANSCRIPT END", evidence[0]["summary"])
+        self.assertNotIn("helpful assistant", evidence[0]["summary"])
+        self.assertNotIn("requested the following action", evidence[0]["summary"])
+        self.assertNotIn("exact planned action", evidence[0]["summary"])
+        self.assertNotIn("Planned action JSON", evidence[0]["summary"])
+        self.assertNotIn('"command"', evidence[0]["summary"])
+        self.assertNotIn("justification", evidence[0]["summary"])
+        self.assertNotIn("APPROVAL REQUEST", evidence[0]["summary"])
+        self.assertNotIn("tool exec_command result", evidence[0]["summary"])
+        self.assertNotIn("tool write_stdin result", evidence[0]["summary"])
+        self.assertNotIn("[794] user", evidence[0]["summary"])
+
+    def test_agent_log_candidates_include_codex_sqlite_logs(self):
+        adapter = ChangeImpactAdapter(workspace_path="/tmp/demo")
+        candidates = [path.name for path in adapter._agent_log_candidates()]
+
+        self.assertIn("logs_2.sqlite", candidates)
+
+    def test_text_from_agent_log_line_extracts_codex_desktop_text_payload(self):
+        adapter = ChangeImpactAdapter(workspace_path="/tmp/demo")
+        text = adapter._text_from_agent_log_line(
+            'session_loop{thread_id=abc}: Submission sub=Submission { '
+            'items: [Text { text: "请修改 backend/app/services/jobs/manager.py 的 rebuild 流程", '
+            'kind: User }] }'
+        )
+
+        self.assertEqual(text, "请修改 backend/app/services/jobs/manager.py 的 rebuild 流程")
+
+    def test_text_from_agent_log_line_prefers_informative_text_payloads(self):
+        adapter = ChangeImpactAdapter(workspace_path="/tmp/demo")
+        text = adapter._text_from_agent_log_line(
+            'session_loop{thread_id=abc}: Submission sub=Submission { '
+            'items: [Text { text: "The following is the Codex agent history whose request action you are assessing.", '
+            'kind: User }, Text { text: "为 backend/tests/test_agentic_change_assessment_builder.py 增加 builder 评估回归测试。", '
+            'kind: User }] }'
+        )
+
+        self.assertEqual(text, "为 backend/tests/test_agentic_change_assessment_builder.py 增加 builder 评估回归测试。")
 
     def test_agent_activity_evidence_does_not_match_generic_basenames(self):
         with tempfile.TemporaryDirectory() as tmp_dir:

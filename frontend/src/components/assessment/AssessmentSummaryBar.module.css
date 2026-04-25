@@ -1,13 +1,18 @@
 .bar {
   flex: 0 0 auto;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
   min-height: 96px;
   padding: 18px 24px;
   background: #ffffff;
   border-bottom: 1px solid #d9dee7;
+}
+
+.primary {
+  min-width: 0;
+  max-width: 980px;
 }
 
 .bar h1 {
@@ -18,6 +23,33 @@
 .bar p {
   margin: 0;
   color: #4b5563;
+}
+
+.roundSummary {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid #d9dee7;
+  border-radius: 6px;
+  background: #f9fafb;
+}
+
+.roundSummary strong {
+  color: #111827;
+  font-size: 13px;
+}
+
+.roundSummary p {
+  color: #111827;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.roundSummary small {
+  color: #4b5563;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .nav {
@@ -47,7 +79,9 @@
 .metrics {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
+  max-width: 360px;
 }
 
 .metrics span {

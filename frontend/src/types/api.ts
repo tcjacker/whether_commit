@@ -348,6 +348,23 @@ export interface AssessmentSummary {
   recommended_review_order: string[]
 }
 
+export interface AgenticSummary {
+  generated_by: 'codex_logs' | 'rules'
+  capture_level: 'full' | 'partial' | 'diff_only'
+  confidence: 'high' | 'medium' | 'low'
+  time_window: {
+    since_commit: string
+    since_commit_time: string | null
+  }
+  user_design_goal: string
+  codex_change_summary: string
+  main_objective: string
+  key_decisions: string[]
+  files_or_areas_changed: string[]
+  tests_and_verification: string[]
+  unknowns: string[]
+}
+
 export interface ChangedFileSummary {
   file_id: string
   path: string
@@ -367,6 +384,7 @@ export interface AssessmentManifest {
   workspace_snapshot_id: string
   repo_key: string
   status: 'ready' | 'partial' | 'failed'
+  agentic_summary: AgenticSummary
   summary: AssessmentSummary
   file_list: ChangedFileSummary[]
   risk_signals_summary: Array<Record<string, unknown>>
@@ -432,6 +450,12 @@ export interface ChangedFileDetail {
     impact_summary: string
     test_summary: string
     recommended_action: string
+    generated_by: 'rules' | 'codex_agent'
+    agent_status: 'not_run' | 'running' | 'accepted' | 'failed' | 'fallback'
+    agent_source: 'codex' | null
+    confidence: 'high' | 'medium' | 'low'
+    evidence_refs: string[]
+    unknowns: string[]
   }
   review_state: {
     review_status: AssessmentReviewStatus

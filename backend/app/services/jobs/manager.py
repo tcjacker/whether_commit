@@ -12,6 +12,7 @@ from app.services.graph_adapter.adapter import GraphAdapter
 from app.services.change_impact.adapter import ChangeImpactAdapter
 from app.services.verification.adapter import VerificationAdapter
 from app.services.review_graph.adapter import ReviewGraphAdapter
+from app.services.agent_records.agent_log import AgentLogRecordAdapter
 from app.services.agent_records.git_diff_only import GitDiffOnlyAdapter
 from app.services.agentic_change_assessment.builder import AgenticChangeAssessmentBuilder
 from app.services.snapshot_store.store import store as snapshot_store
@@ -30,6 +31,7 @@ class JobManager:
         self.repo_locks: Dict[str, asyncio.Lock] = {}
         self.workspace_snapshot_service = WorkspaceSnapshotService()
         self.overview_inference_service = overview_inference_service or OverviewInferenceService()
+        self.agent_log_record_adapter = AgentLogRecordAdapter()
         self.git_diff_only_adapter = GitDiffOnlyAdapter()
         self.assessment_builder = AgenticChangeAssessmentBuilder()
         # For CPU bound operations. Fall back cleanly in sandboxes where process pools are restricted.
@@ -346,11 +348,17 @@ class JobManager:
         verification_data: Dict[str, Any],
         review_graph_data: Dict[str, Any],
     ) -> Dict[str, Any]:
+        change_data = self._ensure_agent_activity_evidence(job, change_data)
         agent_records = [
+            *self.agent_log_record_adapter.build(
+                workspace_snapshot_id=job.workspace_snapshot_id,
+                changed_files=change_data.get("changed_files", []),
+                agent_activity_evidence=change_data.get("agent_activity_evidence", []),
+            ),
             self.git_diff_only_adapter.build(
                 workspace_snapshot_id=job.workspace_snapshot_id,
                 changed_files=change_data.get("changed_files", []),
-            )
+            ),
         ]
         assessment_data = self.assessment_builder.build(
             repo_key=job.repo_key,
@@ -381,6 +389,37 @@ class JobManager:
             workspace_path=job.workspace_path,
         )
         return assessment_data
+
+    def _ensure_agent_activity_evidence(self, job: JobState, change_data: Dict[str, Any]) -> Dict[str, Any]:
+        changed_files = change_data.get("changed_files", [])
+        if not changed_files:
+            return change_data
+
+        existing_evidence = list(change_data.get("agent_activity_evidence", []))
+        covered_files = {
+            path
+            for item in existing_evidence
+            if isinstance(item, dict)
+            for path in item.get("related_files", [])
+            if isinstance(path, str)
+        }
+        missing_files = [path for path in changed_files if path not in covered_files]
+        if not missing_files:
+            return change_data
+
+        try:
+            evidence = ChangeImpactAdapter(
+                workspace_path=job.workspace_path,
+                base_commit_sha=job.base_commit_sha,
+            )._collect_agent_activity_evidence(missing_files)
+        except Exception:
+            return change_data
+        if not evidence:
+            return change_data
+
+        enriched = dict(change_data)
+        enriched["agent_activity_evidence"] = existing_evidence + evidence
+        return enriched
 
     async def _update_job_status(self, job: JobState, status: str, step: str, progress: int, message: str) -> None:
         self._update_job_status_sync(job, status, step, progress, message)

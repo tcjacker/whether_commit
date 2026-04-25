@@ -1,4 +1,5 @@
 from app.services.agent_records.git_diff_only import GitDiffOnlyAdapter
+from app.services.agent_records.agent_log import AgentLogRecordAdapter
 from app.services.agentic_change_assessment.diff_parser import parse_unified_diff_hunks
 from app.services.agentic_change_assessment.id_utils import file_id_for_path
 
@@ -17,6 +18,35 @@ def test_git_diff_only_adapter_builds_low_fidelity_record():
     assert record["confidence"]["files_touched"] == "high"
     assert record["confidence"]["commands_run"] == "low"
     assert record["files_touched"] == ["backend/app/main.py", "frontend/src/App.tsx"]
+
+
+def test_agent_log_record_adapter_groups_codex_and_claude_evidence():
+    adapter = AgentLogRecordAdapter()
+    records = adapter.build(
+        workspace_snapshot_id="ws_2",
+        changed_files=["backend/app/main.py", "frontend/src/App.tsx"],
+        agent_activity_evidence=[
+            {
+                "source": "codex",
+                "summary": "为了让 backend/app/main.py 暴露新的 health verdict，调整响应结构",
+                "related_files": ["backend/app/main.py"],
+            },
+            {
+                "source": "claude_code",
+                "summary": "frontend/src/App.tsx 改成切换 Assessment 和 Tests 模块",
+                "related_files": ["frontend/src/App.tsx"],
+            },
+        ],
+    )
+
+    assert [record["source"] for record in records] == ["claude_code", "codex"]
+    codex = next(record for record in records if record["source"] == "codex")
+    assert codex["capture_level"] == "partial"
+    assert codex["evidence_sources"] == ["codex_jsonl", "agent_activity_evidence"]
+    assert codex["confidence"]["reasoning_summary"] == "medium"
+    assert codex["files_touched"] == ["backend/app/main.py"]
+    assert "health verdict" in codex["declared_intent"]
+    assert "backend/app/main.py" in codex["reasoning_summary"]
 
 
 def test_file_id_for_path_is_stable_and_path_safe():

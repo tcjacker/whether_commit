@@ -12,6 +12,8 @@ CaptureLevel = Literal["full", "partial", "diff_only"]
 ConfidenceLevel = Literal["high", "medium", "low"]
 RelationshipType = Literal["primary", "secondary", "inferred"]
 TestEvidenceKind = Literal["marker", "naming_convention", "graph_inference", "agent_claim"]
+FileAssessmentGenerator = Literal["rules", "codex_agent"]
+AgentAssessmentStatus = Literal["not_run", "running", "accepted", "failed", "fallback"]
 
 
 class AssessmentSummary(BaseModel):
@@ -54,6 +56,29 @@ class ReviewProgress(BaseModel):
     unreviewed: int = 0
 
 
+class AgenticSummaryTimeWindow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    since_commit: str = ""
+    since_commit_time: Optional[str] = None
+
+
+class AgenticSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    generated_by: Literal["codex_logs", "rules"] = "rules"
+    capture_level: CaptureLevel = "diff_only"
+    confidence: ConfidenceLevel = "low"
+    time_window: AgenticSummaryTimeWindow = Field(default_factory=AgenticSummaryTimeWindow)
+    user_design_goal: str = ""
+    codex_change_summary: str = ""
+    main_objective: str = ""
+    key_decisions: List[str] = Field(default_factory=list)
+    files_or_areas_changed: List[str] = Field(default_factory=list)
+    tests_and_verification: List[str] = Field(default_factory=list)
+    unknowns: List[str] = Field(default_factory=list)
+
+
 class AssessmentManifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -61,6 +86,7 @@ class AssessmentManifest(BaseModel):
     workspace_snapshot_id: str
     repo_key: str
     status: Literal["ready", "partial", "failed"] = "ready"
+    agentic_summary: AgenticSummary = Field(default_factory=AgenticSummary)
     summary: AssessmentSummary = Field(default_factory=AssessmentSummary)
     file_list: List[ChangedFileSummary] = Field(default_factory=list)
     risk_signals_summary: List[Dict[str, Any]] = Field(default_factory=list)
@@ -141,6 +167,12 @@ class FileAssessment(BaseModel):
     impact_summary: str = ""
     test_summary: str = ""
     recommended_action: str = ""
+    generated_by: FileAssessmentGenerator = "rules"
+    agent_status: AgentAssessmentStatus = "not_run"
+    agent_source: Optional[Literal["codex"]] = None
+    confidence: ConfidenceLevel = "low"
+    evidence_refs: List[str] = Field(default_factory=list)
+    unknowns: List[str] = Field(default_factory=list)
 
 
 class FileReviewState(BaseModel):

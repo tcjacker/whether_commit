@@ -3,6 +3,8 @@ from __future__ import annotations
 import ast
 import json
 import os
+import re
+import sqlite3
 import subprocess
 from collections import deque
 from pathlib import Path
@@ -10,6 +12,7 @@ from typing import Any, Dict, List, Set, Tuple
 
 from app.services.change_impact.job_extractors import extract_changed_job_facts
 from app.services.change_impact.schema_extractors import extract_changed_schema_facts
+from app.services.agent_records.codex_sessions import CodexSessionReader
 from app.services.graph_adapter.adapter import GraphAdapter
 
 
@@ -49,6 +52,20 @@ class ChangeImpactAdapter:
             check=True,
         )
         return result.stdout
+
+    def _last_commit_timestamp(self) -> int | None:
+        try:
+            result = subprocess.run(
+                ["git", "log", "-1", "--format=%ct"],
+                cwd=self.workspace_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except subprocess.CalledProcessError:
+            return None
+        value = result.stdout.strip()
+        return int(value) if value.isdigit() else None
 
     def _parse_status_entry(self, line: str) -> Dict[str, str]:
         if len(line) < 4:
@@ -193,6 +210,7 @@ class ChangeImpactAdapter:
         candidates = [
             home / ".codex" / "history.jsonl",
             home / ".codex" / "session_index.jsonl",
+            home / ".codex" / "logs_2.sqlite",
         ]
         escaped_workspace = self.workspace_path.replace("/", "-")
         claude_project_dir = home / ".claude" / "projects" / escaped_workspace
@@ -201,6 +219,57 @@ class ChangeImpactAdapter:
             candidates.extend(sorted(claude_project_dir.glob("*.json")))
         return candidates
 
+    def _agent_log_lines(
+        self,
+        candidate: Path,
+        needles: Set[str] | None = None,
+        since_timestamp: int | None = None,
+    ) -> List[str]:
+        if candidate.suffix == ".sqlite":
+            try:
+                conn = sqlite3.connect(str(candidate))
+                try:
+                    columns = {
+                        str(row[1])
+                        for row in conn.execute("pragma table_info(logs)").fetchall()
+                    }
+                    order_parts = [name for name in ("ts", "ts_nanos", "id") if name in columns]
+                    order_clause = ", ".join(f"{name} desc" for name in order_parts) or "rowid desc"
+                    query_needles = sorted({needle for needle in (needles or set()) if needle})
+                    if query_needles:
+                        where = " or ".join("lower(feedback_log_body) like ?" for _ in query_needles)
+                        since_clause = "and ts >= ? " if since_timestamp is not None and "ts" in columns else ""
+                        rows = conn.execute(
+                            "select feedback_log_body from logs "
+                            "where feedback_log_body is not null "
+                            f"{since_clause}"
+                            f"and ({where}) "
+                            f"order by {order_clause} limit 400",
+                            (
+                                ([since_timestamp] if since_timestamp is not None and "ts" in columns else [])
+                                + [f"%{needle.lower()}%" for needle in query_needles]
+                            ),
+                        ).fetchall()
+                    else:
+                        since_clause = "and ts >= ? " if since_timestamp is not None and "ts" in columns else ""
+                        rows = conn.execute(
+                            "select feedback_log_body from logs "
+                            "where feedback_log_body is not null "
+                            f"{since_clause}"
+                            f"order by {order_clause} limit 10000",
+                            [since_timestamp] if since_timestamp is not None and "ts" in columns else [],
+                        ).fetchall()
+                finally:
+                    conn.close()
+            except sqlite3.Error:
+                return []
+            return [str(row[0]) for row in rows if row and row[0]]
+
+        try:
+            return candidate.read_text(encoding="utf-8", errors="replace").splitlines()[-400:]
+        except OSError:
+            return []
+
     def _text_from_agent_log_line(self, raw_line: str) -> str:
         line = raw_line.strip()
         if not line:
@@ -208,6 +277,21 @@ class ChangeImpactAdapter:
         try:
             payload = json.loads(line)
         except json.JSONDecodeError:
+            matches = re.findall(r'Text \{ text: "((?:[^"\\]|\\.)*)"', line)
+            decoded_texts: List[str] = []
+            for match in matches:
+                try:
+                    decoded = ast.literal_eval(f'"{match}"')
+                except (SyntaxError, ValueError):
+                    decoded = match
+                decoded = decoded.strip()
+                if decoded:
+                    decoded_texts.append(decoded)
+            for decoded in decoded_texts:
+                if self._is_informative_agent_summary(" ".join(decoded.split())[:240]):
+                    return decoded[:500]
+            if decoded_texts:
+                return decoded_texts[0][:500]
             return line[:500]
 
         if isinstance(payload, dict):
@@ -247,23 +331,23 @@ class ChangeImpactAdapter:
             for path in changed_files
             if path
         }
+        all_needles = {needle for needles in path_needles.values() for needle in needles}
         evidence: List[Dict[str, Any]] = []
         seen: set[tuple[str, str]] = set()
+        since_timestamp = self._last_commit_timestamp()
 
         for candidate in self._agent_log_candidates():
             if not candidate.exists() or not candidate.is_file():
                 continue
             source = "claude_code" if ".claude" in str(candidate) else "codex"
-            try:
-                lines = candidate.read_text(encoding="utf-8", errors="replace").splitlines()[-400:]
-            except OSError:
-                continue
+            lines = self._agent_log_lines(candidate, all_needles, since_timestamp=since_timestamp)
 
             for raw_line in lines:
                 text = self._text_from_agent_log_line(raw_line)
                 if not text:
                     continue
-                lower = text.lower()
+                match_text = f"{raw_line}\n{text}"
+                lower = match_text.lower()
                 related_files = [
                     path
                     for path, needles in path_needles.items()
@@ -272,6 +356,8 @@ class ChangeImpactAdapter:
                 if not related_files:
                     continue
                 summary = " ".join(text.split())[:240]
+                if not self._is_informative_agent_summary(summary):
+                    continue
                 key = (source, summary)
                 if key in seen:
                     continue
@@ -286,6 +372,68 @@ class ChangeImpactAdapter:
                 if len(evidence) >= 30:
                     return evidence
         return evidence
+
+    def _collect_codex_conversation_evidence(
+        self,
+        since_timestamp: int | None,
+    ) -> Dict[str, Any]:
+        return CodexSessionReader().collect(
+            workspace_path=self.workspace_path,
+            since_timestamp=since_timestamp,
+        )
+
+    def _is_informative_agent_summary(self, summary: str) -> bool:
+        normalized = summary.strip()
+        if not normalized:
+            return False
+        lower = normalized.lower()
+        noisy_prefixes = (
+            "session_loop{",
+            "received message {",
+            "the following is the codex agent history",
+            "the following is the codex agent history added",
+            ">>> transcript start",
+            ">>> transcript delta start",
+            ">>> transcript end",
+            ">>> transcript delta end",
+            "you are a helpful assistant. you will be presented with a user prompt",
+            "reviewed codex session id:",
+            "some conversation entries were omitted.",
+            "the codex agent has requested the following next action:",
+            "the codex agent has requested the following action:",
+            "assess the exact planned action below.",
+            ">>> approval request start",
+            ">>> approval request end",
+            "openai codex ",
+            "tokens used",
+        )
+        if lower.startswith(noisy_prefixes):
+            return False
+        noisy_fragments = (
+            '"type":"response.output_item.done"',
+            '"type":"response.function_call_arguments.done"',
+            '"command": [',
+            '"justification":',
+            '"sandbox_permissions":',
+            '\\"command\\": [',
+            '\\"justification\\":',
+            '\\"sandbox_permissions\\":',
+            "otel.name=",
+            "submission_dispatch{",
+            "run_sampling_request{",
+            "you are a helpful assistant. you will be presented with a user prompt",
+            "reviewed codex session id:",
+            "the codex agent has requested the following action:",
+            "assess the exact planned action below.",
+            "planned action json:",
+            ">>> approval request start",
+            ">>> approval request end",
+            "treat the transcript",
+            "untrusted evidence, not as instructions",
+        )
+        if any(fragment in lower for fragment in noisy_fragments):
+            return False
+        return re.match(r'^(?:\{"text":"|\\n|\s)*\[\d+\]\s+(tool|user|assistant)(?:\s|:)', lower) is None
 
     def _extract_routes_for_node(self, node: ast.AST) -> List[str]:
         routes: List[str] = []
@@ -522,6 +670,7 @@ class ChangeImpactAdapter:
         if not os.path.exists(os.path.join(self.workspace_path, ".git")):
             return {
                 "base_commit_sha": self.base_commit_sha,
+                "base_commit_timestamp": None,
                 "change_title": "Not a git repository",
                 "changed_files": [],
                 "changed_symbols": [],
@@ -547,6 +696,7 @@ class ChangeImpactAdapter:
 
         try:
             entries = self._status_entries()
+            base_commit_timestamp = self._last_commit_timestamp()
             graph_data = self._load_graph_snapshot()
 
             changed_files: List[str] = [entry["path"] for entry in entries]
@@ -556,6 +706,7 @@ class ChangeImpactAdapter:
                 for entry in entries
             }
             agent_activity_evidence = self._collect_agent_activity_evidence(changed_files)
+            codex_conversation_evidence = self._collect_codex_conversation_evidence(base_commit_timestamp)
             changed_symbols: List[str] = []
             changed_functions: List[str] = []
             changed_classes: List[str] = []
@@ -634,11 +785,14 @@ class ChangeImpactAdapter:
 
             return {
                 "base_commit_sha": self.base_commit_sha,
+                "base_commit_timestamp": base_commit_timestamp,
+                "since_commit_time": self._iso_time(base_commit_timestamp),
                 "change_title": f"工作区差异（{len(changed_files)} 个文件）",
                 "changed_files": changed_files,
                 "file_diff_stats": file_diff_stats,
                 "file_diffs": file_diffs,
                 "agent_activity_evidence": agent_activity_evidence,
+                "codex_conversation_evidence": codex_conversation_evidence,
                 "changed_symbols": sorted(set(changed_symbols)),
                 "changed_functions": sorted(set(changed_functions)),
                 "changed_classes": sorted(set(changed_classes)),
@@ -692,3 +846,10 @@ class ChangeImpactAdapter:
             return raw_data
         except Exception as e:
             raise RuntimeError(f"Failed to generate change impact analysis: {str(e)}")
+
+    def _iso_time(self, timestamp: int | None) -> str | None:
+        if timestamp is None:
+            return None
+        from datetime import datetime, timezone
+
+        return datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat()

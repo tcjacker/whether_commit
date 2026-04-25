@@ -12,6 +12,22 @@ def test_assessment_manifest_accepts_phase1_payload():
             "workspace_snapshot_id": "ws_1",
             "repo_key": "demo",
             "status": "ready",
+            "agentic_summary": {
+                "generated_by": "codex_logs",
+                "capture_level": "partial",
+                "confidence": "medium",
+                "time_window": {
+                    "since_commit": "HEAD",
+                    "since_commit_time": None,
+                },
+                "user_design_goal": "用户希望重构 Agentic Change Assessment。",
+                "codex_change_summary": "Codex 修改了 assessment builder 和 UI。",
+                "main_objective": "围绕 diff review 构建评估工作台。",
+                "key_decisions": ["以 diff 为中心"],
+                "files_or_areas_changed": ["backend/app"],
+                "tests_and_verification": ["pytest backend/tests"],
+                "unknowns": ["Codex 日志按 best-effort 采集。"],
+            },
             "summary": {
                 "headline": "Workspace diff requires review.",
                 "overall_risk_level": "medium",
@@ -52,6 +68,7 @@ def test_assessment_manifest_accepts_phase1_payload():
 
     assert manifest.file_list[0].file_id == "cf_abc123"
     assert manifest.summary.changed_file_count == 1
+    assert manifest.agentic_summary.main_objective == "围绕 diff review 构建评估工作台。"
 
 
 def test_changed_file_detail_models_diff_and_related_agent_record():
@@ -114,6 +131,12 @@ def test_changed_file_detail_models_diff_and_related_agent_record():
                 "impact_summary": "Review the diff and related tests.",
                 "test_summary": "No direct test evidence was found.",
                 "recommended_action": "Review this file manually.",
+                "generated_by": "rules",
+                "agent_status": "not_run",
+                "agent_source": None,
+                "confidence": "low",
+                "evidence_refs": ["git_diff"],
+                "unknowns": ["Codex agent assessment has not run."],
             },
             "review_state": {
                 "review_status": "unreviewed",
