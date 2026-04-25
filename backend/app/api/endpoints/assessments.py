@@ -5,12 +5,29 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 
-from app.schemas.assessment import AssessmentManifest, ChangedFileDetail
+from app.schemas.assessment import AssessmentManifest, ChangedFileDetail, RebuildRequest, RebuildResponse
 from app.services.agentic_change_assessment.codex_file_assessment import LocalCodexFileAssessmentAdapter
+from app.services.jobs.manager import job_manager
 from app.services.snapshot_store.store import store as snapshot_store
 
 
 router = APIRouter()
+
+
+@router.post("/rebuild", response_model=RebuildResponse)
+async def trigger_assessment_rebuild(request: RebuildRequest):
+    try:
+        job_id = await job_manager.trigger_rebuild(
+            repo_key=request.repo_key,
+            base_commit_sha=request.base_commit_sha,
+            include_untracked=request.include_untracked,
+            workspace_path=request.workspace_path,
+        )
+        return RebuildResponse(job_id=job_id, status="pending")
+    except RuntimeError as exc:
+        if str(exc) == "REBUILD_ALREADY_RUNNING":
+            raise HTTPException(status_code=409, detail="A rebuild job is already running for this repository.")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get("/latest", response_model=AssessmentManifest)

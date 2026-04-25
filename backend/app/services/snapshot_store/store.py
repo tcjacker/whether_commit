@@ -121,10 +121,6 @@ class SnapshotStore:
         with open(file_path, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    def get_overview(self, repo_key: str, snapshot_id: str, workspace_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        overview_path = os.path.join(self._locate_snapshot_dir(repo_key, snapshot_id, workspace_path=workspace_path), "overview.json")
-        return self._read_json_file(overview_path)
-
     def get_change_analysis(self, repo_key: str, snapshot_id: str, workspace_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
         change_path = os.path.join(self._locate_snapshot_dir(repo_key, snapshot_id, workspace_path=workspace_path), "change_analysis.json")
         return self._read_json_file(change_path)
@@ -163,23 +159,6 @@ class SnapshotStore:
         )
         return self._read_json_file(path)
 
-    def get_latest_overview(self, repo_key: str, workspace_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        resolved_workspace_path = workspace_path or self._resolve_default_workspace_path(repo_key)
-        latest_file = self._workspace_latest_path(repo_key, resolved_workspace_path) if resolved_workspace_path else os.path.join(self._get_repo_dir(repo_key), "latest.json")
-        latest_info = self._read_json_file(latest_file)
-        if not latest_info and resolved_workspace_path and workspace_path is None:
-            latest_file = os.path.join(self._get_repo_dir(repo_key), "latest.json")
-            latest_info = self._read_json_file(latest_file)
-        if not latest_info:
-            return None
-
-        workspace_snapshot_id = latest_info.get("workspace_snapshot_id")
-        if not workspace_snapshot_id:
-            return None
-
-        snapshot_workspace_path = resolved_workspace_path or latest_info.get("workspace_path")
-        return self.get_overview(repo_key, workspace_snapshot_id, workspace_path=snapshot_workspace_path)
-
     def get_latest_assessment_manifest(
         self,
         repo_key: str,
@@ -204,15 +183,6 @@ class SnapshotStore:
 
         snapshot_workspace_path = resolved_workspace_path or latest_info.get("workspace_path")
         return self.get_assessment_manifest(repo_key, workspace_snapshot_id, workspace_path=snapshot_workspace_path)
-
-    def get_latest_capability(self, repo_key: str, capability_key: str, workspace_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        overview = self.get_latest_overview(repo_key, workspace_path=workspace_path)
-        if not overview:
-            return None
-        for capability in overview.get("capability_map", []):
-            if capability.get("capability_key") == capability_key:
-                return capability
-        return None
 
     def save_graph_snapshot(self, repo_key: str, snapshot_id: str, data: Dict[str, Any], workspace_path: Optional[str] = None) -> None:
         path = os.path.join(self._get_snapshot_dir(repo_key, snapshot_id, workspace_path=workspace_path), "graph_snapshot.json")
@@ -271,13 +241,9 @@ class SnapshotStore:
         )
         self._atomic_write(path, data)
 
-    def save_overview(self, repo_key: str, snapshot_id: str, data: Dict[str, Any], workspace_path: Optional[str] = None) -> None:
-        path = os.path.join(self._get_snapshot_dir(repo_key, snapshot_id, workspace_path=workspace_path), "overview.json")
-        self._atomic_write(path, data)
-
     def update_latest_pointer(self, repo_key: str, latest_info: Dict[str, Any], workspace_path: Optional[str] = None) -> None:
         """
-        Updates the latest.json pointer to the newly completed overview.
+        Updates the latest.json pointer to the newly completed assessment.
         """
         payload = dict(latest_info)
         if workspace_path:

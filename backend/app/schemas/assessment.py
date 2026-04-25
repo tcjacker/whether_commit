@@ -16,6 +16,18 @@ FileAssessmentGenerator = Literal["rules", "codex_agent"]
 AgentAssessmentStatus = Literal["not_run", "running", "accepted", "failed", "fallback"]
 
 
+class RebuildRequest(BaseModel):
+    repo_key: str
+    base_commit_sha: str = "HEAD"
+    include_untracked: bool = True
+    workspace_path: Optional[str] = None
+
+
+class RebuildResponse(BaseModel):
+    job_id: str
+    status: str
+
+
 class AssessmentSummary(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

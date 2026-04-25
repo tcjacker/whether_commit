@@ -84,6 +84,13 @@
   max-width: 360px;
 }
 
+.rebuild {
+  flex: 1 0 100%;
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+
 .metrics span {
   padding: 6px 8px;
   border: 1px solid #d9dee7;

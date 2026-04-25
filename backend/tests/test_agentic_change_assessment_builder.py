@@ -62,7 +62,6 @@ def test_builder_creates_manifest_and_lazy_file_detail():
     assert result["file_details"][file_id]["changed_symbols"] == ["backend.app.main.health"]
     assert result["file_details"][file_id]["related_agent_records"][0]["record_id"] == "acr_git_diff_ws_1"
     assert result["review_state"]["file_reviews"][0]["file_id"] == file_id
-    assert result["overview_mirror"]["agentic_change_assessment"]["assessment_id"] == "aca_ws_1"
 
 
 def test_builder_generates_agentic_file_assessment_from_diff_logs_impact_and_tests():

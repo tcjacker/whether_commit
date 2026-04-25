@@ -136,7 +136,6 @@ class AgenticChangeAssessmentBuilder:
             "manifest": manifest,
             "file_details": file_details,
             "review_state": review_state,
-            "overview_mirror": {"agentic_change_assessment": manifest},
         }
 
     def _status_from_change_type(self, change_type: str) -> str:

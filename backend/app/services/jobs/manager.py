@@ -1,7 +1,6 @@
 import asyncio
 import uuid
 import os
-from functools import partial
 from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,20 +16,18 @@ from app.services.agent_records.git_diff_only import GitDiffOnlyAdapter
 from app.services.agentic_change_assessment.builder import AgenticChangeAssessmentBuilder
 from app.services.snapshot_store.store import store as snapshot_store
 from app.services.workspace_snapshot.service import WorkspaceSnapshotService
-from app.services.overview_inference.service import OverviewInferenceService
 
 class JobManager:
     """
     In-memory job manager for the single-worker MVP process.
     Tracks state of background rebuilds and enforces repo-level concurrency locks.
     """
-    def __init__(self, data_dir: str = "data/repos", overview_inference_service: OverviewInferenceService | None = None):
+    def __init__(self, data_dir: str = "data/repos"):
         self.data_dir = data_dir
         self.job_registry: Dict[str, JobState] = {}
         # Concurrency control per repository
         self.repo_locks: Dict[str, asyncio.Lock] = {}
         self.workspace_snapshot_service = WorkspaceSnapshotService()
-        self.overview_inference_service = overview_inference_service or OverviewInferenceService()
         self.agent_log_record_adapter = AgentLogRecordAdapter()
         self.git_diff_only_adapter = GitDiffOnlyAdapter()
         self.assessment_builder = AgenticChangeAssessmentBuilder()
@@ -54,7 +51,7 @@ class JobManager:
         os.makedirs(job_dir, exist_ok=True)
         job_file = os.path.join(job_dir, f"{job.job_id}.json")
         
-        # Simple write since job status isn't as critical as overview snapshot
+        # Simple write since job status is recoverable from the assessment snapshot.
         with open(job_file, "w", encoding="utf-8") as f:
             if hasattr(job, "model_dump_json"):
                 f.write(job.model_dump_json(indent=2))
@@ -171,7 +168,6 @@ class JobManager:
                 self._persist_job_state(job)
 
                 if not workspace_snapshot.has_pending_changes:
-                    minimal_overview = self.overview_inference_service.build_clean_overview(job.repo_key, workspace_snapshot)
                     empty_review_graph = {
                         "version": "v1",
                         "change_id": "chg_none",
@@ -185,18 +181,11 @@ class JobManager:
                         "edges": [],
                         "unresolved_refs": [],
                     }
-                    assessment_data = self._build_and_save_assessment(
+                    self._build_and_save_assessment(
                         job=job,
                         change_data={"changed_files": []},
                         verification_data={},
                         review_graph_data=empty_review_graph,
-                    )
-                    minimal_overview.update(assessment_data["overview_mirror"])
-                    snapshot_store.save_overview(
-                        job.repo_key,
-                        job.workspace_snapshot_id,
-                        minimal_overview,
-                        workspace_path=job.workspace_path,
                     )
                     snapshot_store.save_review_graph(
                         job.repo_key,
@@ -210,7 +199,7 @@ class JobManager:
                             "base_commit_sha": job.base_commit_sha,
                             "workspace_snapshot_id": job.workspace_snapshot_id,
                             "has_pending_changes": False,
-                            "latest_overview_file": f"snapshots/{job.workspace_snapshot_id}/overview.json",
+                            "latest_assessment_file": f"snapshots/{job.workspace_snapshot_id}/agentic_change_assessment/manifest.json",
                             "updated_at": datetime.now(timezone.utc).isoformat(),
                         },
                         workspace_path=job.workspace_path,
@@ -277,47 +266,13 @@ class JobManager:
                     workspace_path=job.workspace_path,
                 )
 
-                # 5. Infer overview (Mock inference based on graph_data, change_data, verification_data)
-                def _report_overview_progress(step: str) -> None:
-                    stage = self._map_overview_progress_step(step)
-                    if stage is None:
-                        return
-                    loop.call_soon_threadsafe(
-                        self._update_job_status_sync,
-                        job,
-                        stage[0],
-                        step,
-                        stage[1],
-                        stage[2],
-                    )
-
-                overview_executor = self.thread_pool
-                overview_data = await loop.run_in_executor(
-                    overview_executor,
-                    partial(
-                        self.overview_inference_service.build_overview,
-                        job.repo_key,
-                        job.workspace_snapshot_id,
-                        graph_data,
-                        change_data,
-                        verification_data,
-                        progress_reporter=_report_overview_progress,
-                    ),
-                )
-
-                assessment_data = self._build_and_save_assessment(
+                # 5. Build the Agentic Change Assessment snapshot.
+                await self._update_job_status(job, "running", "build_assessment", 90, "Building agentic change assessment...")
+                self._build_and_save_assessment(
                     job=job,
                     change_data=change_data,
                     verification_data=verification_data,
                     review_graph_data=review_graph_data,
-                )
-                overview_data.update(assessment_data["overview_mirror"])
-
-                snapshot_store.save_overview(
-                    job.repo_key,
-                    job.workspace_snapshot_id,
-                    overview_data,
-                    workspace_path=job.workspace_path,
                 )
                 
                 # Update latest pointer
@@ -327,7 +282,7 @@ class JobManager:
                         "base_commit_sha": job.base_commit_sha,
                         "workspace_snapshot_id": job.workspace_snapshot_id,
                         "has_pending_changes": workspace_snapshot.has_pending_changes,
-                        "latest_overview_file": f"snapshots/{job.workspace_snapshot_id}/overview.json",
+                        "latest_assessment_file": f"snapshots/{job.workspace_snapshot_id}/agentic_change_assessment/manifest.json",
                         "updated_at": datetime.now(timezone.utc).isoformat()
                     },
                     workspace_path=job.workspace_path,
@@ -431,16 +386,6 @@ class JobManager:
         job.message = message
         job.updated_at = datetime.now(timezone.utc)
         self._persist_job_state(job)
-
-    def _map_overview_progress_step(self, step: str) -> tuple[str, int, str] | None:
-        progress_stage_mapping = {
-            "prepare_agent_context": ("running", 75, "Preparing agent context for overview inference..."),
-            "agent_round_1": ("running", 80, "Running agent overview analysis..."),
-            "agent_round_2": ("running", 83, "Running additional agent context round..."),
-            "validate_agent_output": ("running", 85, "Validating agent overview output..."),
-            "build_overview_payload": ("running", 90, "Building overview payload..."),
-        }
-        return progress_stage_mapping.get(step)
 
     async def get_job_state(self, job_id: str) -> Optional[JobState]:
         return self.job_registry.get(job_id)

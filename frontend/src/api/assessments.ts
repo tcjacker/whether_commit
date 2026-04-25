@@ -1,5 +1,15 @@
 import { get, post } from './client'
-import type { AssessmentManifest, ChangedFileDetail, ChangedFileSummary } from '../types/api'
+import type {
+  AssessmentManifest,
+  ChangedFileDetail,
+  ChangedFileSummary,
+  RebuildRequest,
+  RebuildResponse,
+} from '../types/api'
+
+export function triggerAssessmentRebuild(req: RebuildRequest): Promise<RebuildResponse> {
+  return post<RebuildResponse>('/api/assessments/rebuild', req)
+}
 
 export function fetchLatestAssessment(repoKey: string, workspacePath?: string): Promise<AssessmentManifest> {
   const params = new URLSearchParams({ repo_key: repoKey })

@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { fetchAssessmentFileDetail, fetchLatestAssessment, triggerFileAgentAssessment } from '../api/assessments'
 import { AssessmentSummaryBar } from '../components/assessment/AssessmentSummaryBar'
 import { ChangedFileList } from '../components/assessment/ChangedFileList'
 import { FileDiffReview } from '../components/assessment/FileDiffReview'
 import { FileEvidencePanel } from '../components/assessment/FileEvidencePanel'
+import { useAssessmentRebuild } from '../hooks/useAssessmentRebuild'
 import type { AssessmentManifest, ChangedFileDetail, ChangedFileSummary } from '../types/api'
 import { isTestFile } from '../utils/testFiles'
 import styles from './AssessmentReviewPage.module.css'
@@ -28,14 +29,23 @@ export function AssessmentReviewPage() {
   const [agentRunningFileId, setAgentRunningFileId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  const loadAssessment = useCallback(() => fetchLatestAssessment(repoKey, workspacePath)
+    .then(data => {
+      setManifest(data)
+      setSelectedFileId(data.file_list.find(file => !isTestFile(file.path))?.file_id ?? null)
+      return data
+    }), [repoKey, workspacePath])
+
+  const { rebuild, isRebuilding, job, rebuildError } = useAssessmentRebuild(repoKey, workspacePath, loadAssessment)
+
   useEffect(() => {
-    fetchLatestAssessment(repoKey, workspacePath)
-      .then(data => {
-        setManifest(data)
-        setSelectedFileId(data.file_list.find(file => !isTestFile(file.path))?.file_id ?? null)
-      })
+    loadAssessment()
       .catch(err => setError(String(err)))
-  }, [repoKey, workspacePath])
+  }, [loadAssessment])
+
+  useEffect(() => {
+    if (rebuildError) setError(rebuildError)
+  }, [rebuildError])
 
   useEffect(() => {
     if (!manifest || !selectedFileId) return
@@ -78,7 +88,13 @@ export function AssessmentReviewPage() {
 
   return (
     <div className={styles.page}>
-      <AssessmentSummaryBar manifest={manifest} activeModule="review" />
+      <AssessmentSummaryBar
+        manifest={manifest}
+        activeModule="review"
+        isRebuilding={isRebuilding}
+        rebuildJob={job}
+        onRebuild={rebuild}
+      />
       <div className={styles.workspace}>
         <ChangedFileList files={reviewFiles} selectedFileId={selectedFileId} onSelect={handleSelect} />
         <FileDiffReview detail={detail} />

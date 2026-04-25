@@ -91,8 +91,6 @@ class JobManagerTest(unittest.IsolatedAsyncioTestCase):
 
         with patch.object(manager, "workspace_snapshot_service", _FakeWorkspaceSnapshotService()), patch(
             "app.services.jobs.manager.asyncio.create_task", side_effect=_discard_task
-        ), patch(
-            "app.services.jobs.manager.snapshot_store.save_overview"
         ), patch("app.services.jobs.manager.snapshot_store.update_latest_pointer"):
             job_id = await manager.trigger_rebuild(
                 repo_key="demo",
@@ -133,7 +131,6 @@ class JobManagerTest(unittest.IsolatedAsyncioTestCase):
             fingerprint="123",
         )
 
-        save_overview_calls = []
         update_latest_calls = []
 
         with patch.object(manager.workspace_snapshot_service, "capture", return_value=clean_snapshot) as capture_mock, patch(
@@ -142,9 +139,6 @@ class JobManagerTest(unittest.IsolatedAsyncioTestCase):
             "app.services.jobs.manager.ChangeImpactAdapter", side_effect=AssertionError("ChangeImpactAdapter should not be used")
         ), patch(
             "app.services.jobs.manager.VerificationAdapter", side_effect=AssertionError("VerificationAdapter should not be used")
-        ), patch(
-            "app.services.jobs.manager.snapshot_store.save_overview",
-            side_effect=lambda repo, snapshot_id, payload, **kwargs: save_overview_calls.append((repo, snapshot_id, payload, kwargs)),
         ), patch(
             "app.services.jobs.manager.snapshot_store.save_assessment_manifest"
         ), patch(
@@ -161,11 +155,9 @@ class JobManagerTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(manager.job_registry[job.job_id].step, "done")
         self.assertEqual(manager.job_registry[job.job_id].workspace_snapshot_id, "ws_clean_123")
         self.assertEqual(capture_mock.call_count, 1)
-        self.assertEqual(len(save_overview_calls), 1)
-        self.assertFalse(save_overview_calls[0][2]["snapshot"]["has_pending_changes"])
-        self.assertEqual(save_overview_calls[0][3]["workspace_path"], "/tmp/demo")
         self.assertEqual(len(update_latest_calls), 1)
         self.assertFalse(update_latest_calls[0][1]["has_pending_changes"])
+        self.assertIn("latest_assessment_file", update_latest_calls[0][1])
         self.assertEqual(update_latest_calls[0][2]["workspace_path"], "/tmp/demo")
 
     async def test_run_rebuild_flow_runs_analysis_when_changes_exist(self):
@@ -253,17 +245,13 @@ class JobManagerTest(unittest.IsolatedAsyncioTestCase):
             "evidence_by_path": {"app/main.py": "No direct tests found"},
         }
 
-        save_overview_calls = []
         save_assessment_manifest_calls = []
         save_assessment_file_detail_calls = []
         save_assessment_review_state_calls = []
         update_latest_calls = []
-        scheduled_steps = []
 
         class _FakeLoop:
             def call_soon_threadsafe(self, callback, *args):
-                if len(args) >= 3:
-                    scheduled_steps.append(args[2])
                 callback(*args)
 
             async def run_in_executor(self, executor, func, *args):
@@ -320,9 +308,6 @@ class JobManagerTest(unittest.IsolatedAsyncioTestCase):
             "app.services.jobs.manager.snapshot_store.save_assessment_review_state",
             side_effect=lambda repo, snapshot_id, payload, **kwargs: save_assessment_review_state_calls.append((repo, snapshot_id, payload, kwargs)),
         ), patch(
-            "app.services.jobs.manager.snapshot_store.save_overview",
-            side_effect=lambda repo, snapshot_id, payload, **kwargs: save_overview_calls.append((repo, snapshot_id, payload, kwargs)),
-        ), patch(
             "app.services.jobs.manager.snapshot_store.update_latest_pointer",
             side_effect=lambda repo, payload, **kwargs: update_latest_calls.append((repo, payload, kwargs)),
         ):
@@ -330,14 +315,10 @@ class JobManagerTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(manager.job_registry[job.job_id].status, "success")
         self.assertEqual(manager.job_registry[job.job_id].workspace_snapshot_id, "ws_pending_123")
-        self.assertIn("prepare_agent_context", scheduled_steps)
-        self.assertIn("build_overview_payload", scheduled_steps)
         self.assertEqual(len(save_graph_mock.call_args_list), 1)
         self.assertEqual(len(save_change_mock.call_args_list), 1)
         self.assertEqual(len(save_verification_mock.call_args_list), 1)
         self.assertEqual(len(save_review_graph_mock.call_args_list), 1)
-        self.assertEqual(len(save_overview_calls), 1)
-        self.assertEqual(save_overview_calls[0][3]["workspace_path"], "/tmp/demo")
         self.assertEqual(len(save_assessment_manifest_calls), 1)
         self.assertEqual(save_assessment_manifest_calls[0][2]["assessment_id"], "aca_ws_pending_123")
         self.assertEqual(save_assessment_manifest_calls[0][3]["workspace_path"], "/tmp/demo")
@@ -349,6 +330,8 @@ class JobManagerTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("健康检查结构", save_assessment_file_detail_calls[0][3]["file_assessment"]["why_changed"])
         self.assertEqual(len(save_assessment_review_state_calls), 1)
         self.assertEqual(save_assessment_review_state_calls[0][2]["scope"], "assessment")
+        self.assertEqual(len(update_latest_calls), 1)
+        self.assertIn("latest_assessment_file", update_latest_calls[0][1])
 
     def test_build_assessment_collects_agent_activity_when_change_analysis_missing_it(self):
         manager = JobManager(data_dir=tempfile.mkdtemp())

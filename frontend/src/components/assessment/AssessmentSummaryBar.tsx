@@ -1,12 +1,21 @@
 import type { AssessmentManifest } from '../../types/api'
+import { RebuildButton } from '../rebuild/RebuildButton'
+import { RebuildProgress } from '../rebuild/RebuildProgress'
 import styles from './AssessmentSummaryBar.module.css'
+import type { JobState } from '../../types/api'
 
 export function AssessmentSummaryBar({
   manifest,
   activeModule = 'review',
+  isRebuilding = false,
+  rebuildJob = null,
+  onRebuild,
 }: {
   manifest: AssessmentManifest
   activeModule?: 'review' | 'tests'
+  isRebuilding?: boolean
+  rebuildJob?: JobState | null
+  onRebuild?: () => void
 }) {
   const query = window.location.search
   const agenticSummary = manifest.agentic_summary
@@ -38,6 +47,12 @@ export function AssessmentSummaryBar({
         </nav>
       </div>
       <div className={styles.metrics}>
+        {onRebuild && (
+          <div className={styles.rebuild}>
+            <RebuildButton isRebuilding={isRebuilding} onClick={onRebuild} />
+            <RebuildProgress job={rebuildJob} />
+          </div>
+        )}
         <span>Agent summary: {agenticSummary.capture_level}</span>
         <span>Confidence: {agenticSummary.confidence}</span>
         <span>Risk: {manifest.summary.overall_risk_level}</span>
