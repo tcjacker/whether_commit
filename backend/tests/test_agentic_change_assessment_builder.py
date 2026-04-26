@@ -333,3 +333,466 @@ def test_builder_uses_classified_conversation_summary_when_available():
     assert any("不调用 LLM" in item for item in summary["key_decisions"])
     assert "pytest backend/tests/test_codex_session_reader.py" in summary["tests_and_verification"]
     assert any("Codex LLM 二次压缩" in item for item in summary["unknowns"])
+
+
+def test_builder_emits_v02_review_signals_from_claims_tests_and_hunks():
+    builder = AgenticChangeAssessmentBuilder()
+    agent_record = {
+        "record_id": "acr_codex_ws_6",
+        "source": "codex",
+        "capture_level": "partial",
+        "evidence_sources": ["codex_jsonl"],
+        "confidence": {
+            "files_touched": "high",
+            "commands_run": "medium",
+            "reasoning_summary": "medium",
+            "tests_run": "low",
+        },
+        "task_summary": "Agent said it added tests for the API type change.",
+        "declared_intent": "Add tests for API response handling.",
+        "reasoning_summary": "Need test coverage for changed API client behavior.",
+        "files_touched": ["frontend/src/types/api.ts"],
+        "commands_run": [],
+        "tests_run": [],
+        "known_limitations": [],
+        "raw_log_ref": "codex://session/sess_6",
+    }
+    change_data = {
+        "base_commit_sha": "abc123",
+        "changed_files": ["frontend/src/types/api.ts"],
+        "changed_symbols": ["EvidenceGrade"],
+        "file_diff_stats": {
+            "frontend/src/types/api.ts": {
+                "added_lines": 70,
+                "deleted_lines": 4,
+                "change_type": "modified file",
+            }
+        },
+        "file_diffs": {
+            "frontend/src/types/api.ts": "@@ -1,2 +1,4 @@\n export type A = string\n+export type EvidenceGrade = 'claimed'\n+export interface AgentClaim {}\n"
+        },
+        "codex_conversation_evidence": {
+            "source": "codex_session_jsonl",
+            "capture_level": "partial",
+            "session_ids": ["sess_6"],
+            "message_count": 2,
+            "user_messages": ["请为 API 类型变化补测试。"],
+            "assistant_messages": ["我已经添加测试覆盖 API 类型变化。"],
+            "classified_summary": {
+                "goals": ["为 API 类型变化补测试。"],
+                "decisions": [],
+                "implementation_actions": ["修改 frontend/src/types/api.ts。"],
+                "tests_and_verification": ["声称添加测试，但没有执行命令。"],
+            },
+        },
+    }
+
+    result = builder.build(
+        repo_key="demo",
+        workspace_snapshot_id="ws_6",
+        change_data=change_data,
+        verification_data={
+            "affected_tests": [],
+            "missing_tests_for_changed_paths": ["frontend/src/types/api.ts"],
+            "evidence_by_path": {},
+        },
+        review_graph_data={"nodes": [], "edges": []},
+        agent_records=[agent_record],
+    )
+
+    manifest = result["manifest"]
+    file_summary = manifest["file_list"][0]
+    file_detail = result["file_details"][file_summary["file_id"]]
+
+    assert manifest["mode"] == "working_tree"
+    assert manifest["provenance_capture_level"] == "partial"
+    assert manifest["review_decision"] == "needs_tests"
+    assert manifest["mismatch_count"] == 1
+    assert manifest["weak_test_evidence_count"] == 1
+    assert manifest["hunk_queue_preview"][0]["priority"] == file_summary["highest_hunk_priority"]
+    assert file_summary["mismatch_count"] == 1
+    assert file_summary["weakest_test_evidence_grade"] == "claimed"
+
+    assert file_detail["agent_claims"][0]["type"] == "test"
+    assert file_detail["agent_claims"][0]["session_id"] == "sess_6"
+    assert file_detail["mismatches"][0]["kind"] == "claimed_tested_but_no_executed_test_evidence"
+    assert file_detail["related_tests"][0]["evidence_grade"] == "claimed"
+    assert file_detail["provenance_refs"][0]["session_id"] == "sess_6"
+    assert file_detail["hunk_review_items"][0]["priority"] >= 70
+
+
+def test_builder_detects_ui_only_and_config_only_claim_mismatches():
+    builder = AgenticChangeAssessmentBuilder()
+    agent_record = {
+        "record_id": "acr_codex_ws_7",
+        "source": "codex",
+        "capture_level": "partial",
+        "evidence_sources": ["codex_jsonl"],
+        "confidence": {
+            "files_touched": "medium",
+            "commands_run": "low",
+            "reasoning_summary": "medium",
+            "tests_run": "low",
+        },
+        "task_summary": "This is UI only page polish and config-only cleanup.",
+        "declared_intent": "Only frontend UI and config changes.",
+        "reasoning_summary": "",
+        "files_touched": ["backend/app/services/runtime.py"],
+        "commands_run": [],
+        "tests_run": [],
+        "known_limitations": [],
+        "raw_log_ref": "codex://session/sess_7",
+    }
+    change_data = {
+        "changed_files": ["backend/app/services/runtime.py"],
+        "changed_symbols": ["RuntimeService"],
+        "file_diff_stats": {
+            "backend/app/services/runtime.py": {
+                "added_lines": 8,
+                "deleted_lines": 1,
+                "change_type": "modified file",
+            }
+        },
+        "file_diffs": {
+            "backend/app/services/runtime.py": "@@ -1,2 +1,3 @@\n class RuntimeService:\n+    enabled = True\n"
+        },
+        "codex_conversation_evidence": {
+            "source": "codex_session_jsonl",
+            "capture_level": "partial",
+            "session_ids": ["sess_7"],
+            "message_count": 2,
+            "classified_summary": {
+                "goals": ["仅前端页面改造。"],
+                "decisions": ["配置 cleanup only。"],
+                "implementation_actions": ["config-only cleanup."],
+                "tests_and_verification": [],
+            },
+        },
+    }
+
+    result = builder.build(
+        repo_key="demo",
+        workspace_snapshot_id="ws_7",
+        change_data=change_data,
+        verification_data={"affected_tests": [], "missing_tests_for_changed_paths": [], "evidence_by_path": {}},
+        review_graph_data={"nodes": [], "edges": []},
+        agent_records=[agent_record],
+    )
+
+    file_summary = result["manifest"]["file_list"][0]
+    file_detail = result["file_details"][file_summary["file_id"]]
+    mismatch_kinds = {mismatch["kind"] for mismatch in file_detail["mismatches"]}
+
+    assert "claimed_ui_only_but_backend_changed" in mismatch_kinds
+    assert "claimed_config_only_but_runtime_code_changed" in mismatch_kinds
+    assert file_summary["mismatch_count"] == 2
+
+
+def test_builder_grades_test_evidence_levels():
+    builder = AgenticChangeAssessmentBuilder()
+
+    assert builder._test_evidence_grade(relationship="primary", status="passed", evidence="graph_inference") == "direct"
+    assert builder._test_evidence_grade(relationship="secondary", status="passed", evidence="graph_inference") == "indirect"
+    assert builder._test_evidence_grade(relationship="primary", status="not_run", evidence="graph_inference") == "not_run"
+    assert builder._test_evidence_grade(relationship="inferred", status="unknown", evidence="graph_inference") == "inferred"
+    assert builder._test_evidence_grade(relationship="inferred", status="unknown", evidence="agent_claim") == "claimed"
+
+
+def test_hunk_queue_prioritizes_removed_fallback_and_aligns_provenance_hunk_id():
+    builder = AgenticChangeAssessmentBuilder()
+    agent_record = {
+        "record_id": "acr_codex_ws_8",
+        "source": "codex",
+        "capture_level": "partial",
+        "evidence_sources": ["codex_jsonl"],
+        "confidence": {
+            "files_touched": "high",
+            "commands_run": "low",
+            "reasoning_summary": "medium",
+            "tests_run": "low",
+        },
+        "task_summary": "Implement runtime behavior update.",
+        "declared_intent": "",
+        "reasoning_summary": "",
+        "files_touched": ["backend/app/services/runtime.py"],
+        "commands_run": [],
+        "tests_run": [],
+        "known_limitations": [],
+        "raw_log_ref": "codex://session/sess_8",
+    }
+    change_data = {
+        "changed_files": ["backend/app/services/runtime.py"],
+        "changed_symbols": ["run"],
+        "file_diff_stats": {
+            "backend/app/services/runtime.py": {
+                "added_lines": 2,
+                "deleted_lines": 2,
+                "change_type": "modified file",
+            }
+        },
+        "file_diffs": {
+            "backend/app/services/runtime.py": (
+                "@@ -1,3 +1,3 @@\n"
+                " def run():\n"
+                "-    if not allowed:\n"
+                "-        return fallback()\n"
+                "+    execute()\n"
+                "@@ -10,2 +10,2 @@\n"
+                " def other():\n"
+                "+    return True\n"
+            )
+        },
+        "codex_conversation_evidence": {
+            "source": "codex_session_jsonl",
+            "capture_level": "partial",
+            "session_ids": ["sess_8"],
+            "message_count": 1,
+            "classified_summary": {
+                "goals": ["实现 runtime behavior update。"],
+                "decisions": [],
+                "implementation_actions": ["修改 backend/app/services/runtime.py。"],
+                "tests_and_verification": [],
+            },
+        },
+    }
+
+    result = builder.build(
+        repo_key="demo",
+        workspace_snapshot_id="ws_8",
+        change_data=change_data,
+        verification_data={"affected_tests": [], "missing_tests_for_changed_paths": [], "evidence_by_path": {}},
+        review_graph_data={"nodes": [], "edges": []},
+        agent_records=[agent_record],
+    )
+
+    file_summary = result["manifest"]["file_list"][0]
+    hunks = result["file_details"][file_summary["file_id"]]["hunk_review_items"]
+
+    assert hunks[0]["priority"] > hunks[1]["priority"]
+    assert "guard_or_fallback_deleted" in hunks[0]["fact_basis"]
+    assert hunks[0]["provenance_refs"][0]["hunk_id"] == "hunk_001"
+    assert hunks[1]["provenance_refs"][0]["hunk_id"] == "hunk_002"
+
+
+def test_builder_does_not_spread_path_specific_test_claims_to_every_file():
+    builder = AgenticChangeAssessmentBuilder()
+    change_data = {
+        "changed_files": ["frontend/src/types/api.ts", "frontend/src/components/Button.tsx"],
+        "changed_symbols": ["EvidenceGrade", "Button"],
+        "file_diff_stats": {
+            "frontend/src/types/api.ts": {
+                "added_lines": 30,
+                "deleted_lines": 2,
+                "change_type": "modified file",
+            },
+            "frontend/src/components/Button.tsx": {
+                "added_lines": 3,
+                "deleted_lines": 1,
+                "change_type": "modified file",
+            },
+        },
+        "file_diffs": {
+            "frontend/src/types/api.ts": "@@ -1 +1,2 @@\n+export type EvidenceGrade = 'claimed'\n",
+            "frontend/src/components/Button.tsx": "@@ -1 +1 @@\n+export function Button() {}\n",
+        },
+        "codex_conversation_evidence": {
+            "source": "codex_session_jsonl",
+            "capture_level": "partial",
+            "session_ids": ["sess_9"],
+            "message_count": 2,
+            "classified_summary": {
+                "goals": ["为 frontend/src/types/api.ts 补测试。"],
+                "decisions": [],
+                "implementation_actions": ["修改 frontend/src/types/api.ts。"],
+                "tests_and_verification": ["frontend/src/types/api.ts 的测试已添加，但没有执行命令。"],
+            },
+        },
+    }
+
+    result = builder.build(
+        repo_key="demo",
+        workspace_snapshot_id="ws_9",
+        change_data=change_data,
+        verification_data={"affected_tests": [], "missing_tests_for_changed_paths": [], "evidence_by_path": {}},
+        review_graph_data={"nodes": [], "edges": []},
+        agent_records=[],
+    )
+
+    by_path = {
+        summary["path"]: result["file_details"][summary["file_id"]]
+        for summary in result["manifest"]["file_list"]
+    }
+
+    assert by_path["frontend/src/types/api.ts"]["mismatches"][0]["kind"] == "claimed_tested_but_no_executed_test_evidence"
+    assert by_path["frontend/src/components/Button.tsx"]["mismatches"] == []
+
+
+def test_hunk_priority_uses_graduated_scores_instead_of_saturating_common_cases():
+    builder = AgenticChangeAssessmentBuilder()
+    change_data = {
+        "changed_files": ["frontend/src/types/api.ts"],
+        "changed_symbols": ["EvidenceGrade"],
+        "file_diff_stats": {
+            "frontend/src/types/api.ts": {
+                "added_lines": 70,
+                "deleted_lines": 4,
+                "change_type": "modified file",
+            }
+        },
+        "file_diffs": {
+            "frontend/src/types/api.ts": "@@ -1 +1,3 @@\n+export type EvidenceGrade = 'unknown'\n+export type ReviewDecision = 'needs_tests'\n"
+        },
+    }
+
+    result = builder.build(
+        repo_key="demo",
+        workspace_snapshot_id="ws_10",
+        change_data=change_data,
+        verification_data={"affected_tests": [], "missing_tests_for_changed_paths": [], "evidence_by_path": {}},
+        review_graph_data={"nodes": [], "edges": []},
+        agent_records=[],
+    )
+
+    file_summary = result["manifest"]["file_list"][0]
+
+    assert file_summary["highest_hunk_priority"] == 50
+    assert result["file_details"][file_summary["file_id"]]["hunk_review_items"][0]["risk_level"] == "medium"
+
+
+def test_builder_uses_structured_codex_refs_for_claim_and_hunk_provenance():
+    builder = AgenticChangeAssessmentBuilder()
+    change_data = {
+        "changed_files": ["frontend/src/api/client.ts"],
+        "changed_symbols": ["request"],
+        "file_diff_stats": {
+            "frontend/src/api/client.ts": {
+                "added_lines": 4,
+                "deleted_lines": 1,
+                "change_type": "modified file",
+            }
+        },
+        "file_diffs": {
+            "frontend/src/api/client.ts": "@@ -1,2 +1,4 @@\n try:\n-old\n+new\n"
+        },
+        "codex_conversation_evidence": {
+            "source": "codex_session_jsonl",
+            "capture_level": "partial",
+            "session_ids": ["sess_structured"],
+            "message_count": 1,
+            "user_messages": ["请修改 frontend/src/api/client.ts。"],
+            "assistant_messages": [],
+            "message_refs": [
+                {
+                    "session_id": "sess_structured",
+                    "message_ref": "msg_user_1",
+                    "role": "user",
+                    "text": "请修改 frontend/src/api/client.ts 并补测试。",
+                }
+            ],
+            "tool_calls": [
+                {
+                    "session_id": "sess_structured",
+                    "tool_call_ref": "call_patch_1",
+                    "tool_name": "apply_patch",
+                    "arguments": "*** Update File: frontend/src/api/client.ts",
+                    "related_files": ["frontend/src/api/client.ts"],
+                }
+            ],
+            "commands": [
+                {
+                    "session_id": "sess_structured",
+                    "tool_call_ref": "call_exec_1",
+                    "command": "sed -n '1,80p' frontend/src/api/client.ts",
+                    "related_files": ["frontend/src/api/client.ts"],
+                }
+            ],
+            "file_refs": [
+                {
+                    "session_id": "sess_structured",
+                    "message_ref": "",
+                    "tool_call_ref": "call_patch_1",
+                    "source": "tool:apply_patch",
+                    "file_path": "frontend/src/api/client.ts",
+                    "confidence": "high",
+                }
+            ],
+            "classified_summary": {
+                "goals": ["请修改 frontend/src/api/client.ts 并补测试。"],
+                "decisions": [],
+                "implementation_actions": ["修改 frontend/src/api/client.ts。"],
+                "tests_and_verification": ["npm test -- api"],
+            },
+        },
+    }
+
+    result = builder.build(
+        repo_key="demo",
+        workspace_snapshot_id="ws_11",
+        change_data=change_data,
+        verification_data={"affected_tests": [], "missing_tests_for_changed_paths": [], "evidence_by_path": {}},
+        review_graph_data={"nodes": [], "edges": []},
+        agent_records=[],
+    )
+
+    file_summary = result["manifest"]["file_list"][0]
+    detail = result["file_details"][file_summary["file_id"]]
+
+    assert detail["agent_claims"][0]["message_ref"] == "msg_user_1"
+    assert detail["agent_claims"][0]["session_id"] == "sess_structured"
+    assert detail["provenance_refs"][0]["tool_call_ref"] == "call_patch_1"
+    assert detail["provenance_refs"][0]["confidence"] == "high"
+    assert detail["hunk_review_items"][0]["provenance_refs"][0]["tool_call_ref"] == "call_patch_1"
+    assert detail["hunk_review_items"][0]["provenance_refs"][0]["hunk_id"] == "hunk_001"
+    assert any(ref["command"] == "sed -n '1,80p' frontend/src/api/client.ts" for ref in detail["provenance_refs"])
+
+
+def test_builder_uses_codex_command_evidence_for_related_test_grade():
+    builder = AgenticChangeAssessmentBuilder()
+    change_data = {
+        "changed_files": ["frontend/src/api/client.ts"],
+        "changed_symbols": ["request"],
+        "file_diff_stats": {
+            "frontend/src/api/client.ts": {
+                "added_lines": 4,
+                "deleted_lines": 1,
+                "change_type": "modified file",
+            }
+        },
+        "file_diffs": {
+            "frontend/src/api/client.ts": "@@ -1 +1 @@\n+new\n"
+        },
+        "codex_conversation_evidence": {
+            "source": "codex_session_jsonl",
+            "capture_level": "partial",
+            "session_ids": ["sess_command"],
+            "message_count": 1,
+            "commands": [
+                {
+                    "session_id": "sess_command",
+                    "tool_call_ref": "call_exec_1",
+                    "command": "npm test -- api",
+                    "related_files": [],
+                }
+            ],
+        },
+    }
+
+    result = builder.build(
+        repo_key="demo",
+        workspace_snapshot_id="ws_12",
+        change_data=change_data,
+        verification_data={
+            "affected_tests": ["frontend/src/api/__tests__/client.test.ts"],
+            "missing_tests_for_changed_paths": [],
+            "evidence_by_path": {},
+        },
+        review_graph_data={"nodes": [], "edges": []},
+        agent_records=[],
+    )
+
+    file_summary = result["manifest"]["file_list"][0]
+    related_test = result["file_details"][file_summary["file_id"]]["related_tests"][0]
+
+    assert related_test["last_status"] == "passed"
+    assert related_test["evidence_grade"] == "direct"
+    assert "command_evidence" in related_test["basis"]

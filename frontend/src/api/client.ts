@@ -22,7 +22,9 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     try {
       const json = await res.json()
       detail = json.detail ?? detail
-    } catch {}
+    } catch {
+      detail = res.statusText
+    }
     throw new ApiError(res.status, detail)
   }
   return res.json() as Promise<T>

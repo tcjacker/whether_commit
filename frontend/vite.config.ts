@@ -1,7 +1,14 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type UserConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-const config = {
+interface FrontendConfig extends UserConfig {
+  test: {
+    environment: string
+    setupFiles: string[]
+  }
+}
+
+const config: FrontendConfig = {
   plugins: [react()],
   server: {
     port: 5173,
@@ -14,6 +21,6 @@ const config = {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
   },
-} as any
+}
 
 export default defineConfig(config)

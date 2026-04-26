@@ -1,6 +1,12 @@
 export type AssessmentRiskLevel = 'high' | 'medium' | 'low' | 'unknown'
 export type AssessmentCoverageStatus = 'covered' | 'partial' | 'missing' | 'unknown'
 export type AssessmentReviewStatus = 'unreviewed' | 'reviewed' | 'needs_follow_up' | 'needs_recheck'
+export type AssessmentMode = 'working_tree' | 'commit_range' | 'pull_request'
+export type AssessmentCaptureLevel = 'full' | 'partial' | 'diff_only'
+export type AssessmentConfidenceLevel = 'high' | 'medium' | 'low'
+export type EvidenceGrade = 'direct' | 'indirect' | 'inferred' | 'claimed' | 'not_run' | 'unknown'
+export type ReviewDecision = 'safe_to_commit' | 'needs_recheck' | 'needs_tests' | 'do_not_commit_yet' | 'unknown'
+export type ClaimType = 'refactor' | 'bugfix' | 'feature' | 'test' | 'config' | 'docs' | 'cleanup' | 'unknown'
 
 export interface AssessmentSummary {
   headline: string
@@ -16,8 +22,8 @@ export interface AssessmentSummary {
 
 export interface AgenticSummary {
   generated_by: 'codex_logs' | 'rules'
-  capture_level: 'full' | 'partial' | 'diff_only'
-  confidence: 'high' | 'medium' | 'low'
+  capture_level: AssessmentCaptureLevel
+  confidence: AssessmentConfidenceLevel
   time_window: {
     since_commit: string
     since_commit_time: string | null
@@ -43,6 +49,9 @@ export interface ChangedFileSummary {
   review_status: AssessmentReviewStatus
   agent_sources: string[]
   diff_fingerprint: string
+  highest_hunk_priority?: number
+  mismatch_count?: number
+  weakest_test_evidence_grade?: EvidenceGrade
 }
 
 export interface AssessmentManifest {
@@ -50,6 +59,12 @@ export interface AssessmentManifest {
   workspace_snapshot_id: string
   repo_key: string
   status: 'ready' | 'partial' | 'failed'
+  mode?: AssessmentMode
+  provenance_capture_level?: AssessmentCaptureLevel
+  mismatch_count?: number
+  weak_test_evidence_count?: number
+  review_decision?: ReviewDecision
+  hunk_queue_preview?: HunkReviewItem[]
   agentic_summary: AgenticSummary
   summary: AssessmentSummary
   file_list: ChangedFileSummary[]
@@ -82,9 +97,9 @@ export interface DiffHunk {
 export interface AgentChangeRecord {
   record_id: string
   source: string
-  capture_level: 'full' | 'partial' | 'diff_only'
+  capture_level: AssessmentCaptureLevel
   evidence_sources: string[]
-  confidence: Record<string, 'high' | 'medium' | 'low'>
+  confidence: Record<string, AssessmentConfidenceLevel>
   task_summary: string
   declared_intent: string
   reasoning_summary: string
@@ -102,6 +117,53 @@ export interface TestRelationship {
   confidence: 'high' | 'medium' | 'low'
   last_status: 'passed' | 'failed' | 'not_run' | 'unknown'
   evidence: 'marker' | 'naming_convention' | 'graph_inference' | 'agent_claim'
+  evidence_grade?: EvidenceGrade
+  basis?: string[]
+}
+
+export interface AgentClaim {
+  claim_id: string
+  type: ClaimType
+  text: string
+  source: string
+  session_id: string
+  message_ref: string
+  tool_call_ref: string
+  related_files: string[]
+  confidence: AssessmentConfidenceLevel
+}
+
+export interface ProvenanceRef {
+  source: string
+  session_id: string
+  message_ref: string
+  tool_call_ref: string
+  command: string
+  file_path: string
+  hunk_id: string
+  confidence: AssessmentConfidenceLevel
+}
+
+export interface ClaimMismatch {
+  mismatch_id: string
+  kind: string
+  claim_id: string
+  severity: AssessmentRiskLevel
+  explanation: string
+  fact_refs: string[]
+  provenance_refs: ProvenanceRef[]
+}
+
+export interface HunkReviewItem {
+  hunk_id: string
+  file_id: string
+  path: string
+  priority: number
+  risk_level: AssessmentRiskLevel
+  reasons: string[]
+  fact_basis: string[]
+  provenance_refs: ProvenanceRef[]
+  mismatch_ids: string[]
 }
 
 export interface ChangedFileDetail {
@@ -111,6 +173,10 @@ export interface ChangedFileDetail {
   related_agent_records: AgentChangeRecord[]
   related_tests: TestRelationship[]
   impact_facts: Array<Record<string, unknown>>
+  agent_claims?: AgentClaim[]
+  mismatches?: ClaimMismatch[]
+  provenance_refs?: ProvenanceRef[]
+  hunk_review_items?: HunkReviewItem[]
   file_assessment: {
     why_changed: string
     impact_summary: string

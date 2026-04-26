@@ -1,21 +1,21 @@
 .bar {
+  position: relative;
   flex: 0 0 auto;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  min-height: 96px;
-  padding: 18px 24px;
+  display: block;
+  min-height: 88px;
+  max-height: 430px;
+  padding: 14px 0 18px;
   background: #ffffff;
   border-bottom: 1px solid #d9dee7;
 }
 
 .primary {
   min-width: 0;
-  max-width: 980px;
+  padding-right: 0;
 }
 
 .bar h1 {
+  max-width: calc(100% - 230px);
   margin: 0 0 6px;
   font-size: 20px;
 }
@@ -25,19 +25,38 @@
   color: #4b5563;
 }
 
+.primary > p {
+  max-width: calc(100% - 230px);
+}
+
 .roundSummary {
   display: grid;
-  gap: 4px;
-  margin-top: 12px;
+  gap: 8px;
+  width: 100%;
+  max-height: 300px;
+  overflow: auto;
+  margin-top: 8px;
   padding: 10px 12px;
   border: 1px solid #d9dee7;
   border-radius: 6px;
   background: #f9fafb;
 }
 
+.roundSummary header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .roundSummary strong {
   color: #111827;
   font-size: 13px;
+}
+
+.roundSummary header span {
+  color: #6b7280;
+  font-size: 12px;
 }
 
 .roundSummary p {
@@ -46,16 +65,62 @@
   line-height: 1.45;
 }
 
+.objective {
+  font-weight: 600;
+}
+
+.briefGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.briefGrid article {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  column-gap: 12px;
+  row-gap: 3px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.briefGrid h2 {
+  grid-row: span 2;
+  margin: 0 0 5px;
+  color: #111827;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.briefGrid p {
+  margin: 0 0 5px;
+  color: #1f2937;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .roundSummary small {
+  display: block;
+  overflow: hidden;
   color: #4b5563;
   font-size: 12px;
   line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.verdict {
+  border-color: #c7d2fe !important;
+  background: #eef2ff !important;
 }
 
 .nav {
   display: flex;
   gap: 4px;
-  margin-top: 12px;
+  margin-top: 8px;
 }
 
 .nav a {
@@ -77,11 +142,14 @@
 }
 
 .metrics {
+  position: absolute;
+  top: 14px;
+  right: 0;
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
-  max-width: 360px;
+  width: 200px;
 }
 
 .rebuild {

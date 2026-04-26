@@ -32,6 +32,32 @@
   white-space: pre-wrap;
 }
 
+.hunk {
+  border-bottom: 1px solid #eef2f7;
+}
+
+.hunkHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 14px;
+  border-top: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.hunkHeader span,
+.hunkHeader strong {
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.hunkHeader strong {
+  color: #991b1b;
+}
+
 .add {
   background: #ecfdf3;
 }

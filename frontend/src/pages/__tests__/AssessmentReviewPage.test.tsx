@@ -8,6 +8,24 @@ vi.mock('../../api/assessments', () => ({
     workspace_snapshot_id: 'ws_1',
     repo_key: 'demo',
     status: 'ready',
+    mode: 'working_tree',
+    provenance_capture_level: 'partial',
+    mismatch_count: 1,
+    weak_test_evidence_count: 1,
+    review_decision: 'needs_tests',
+    hunk_queue_preview: [
+      {
+        hunk_id: 'hunk_001',
+        file_id: 'cf_abc123',
+        path: 'backend/app/main.py',
+        priority: 92,
+        risk_level: 'high',
+        reasons: ['public API changed', 'claimed tests have no execution evidence'],
+        fact_basis: ['route_reference', 'no_execution_record'],
+        provenance_refs: [],
+        mismatch_ids: ['mm_001'],
+      },
+    ],
     agentic_summary: {
       generated_by: 'codex_logs',
       capture_level: 'partial',
@@ -34,6 +52,22 @@ vi.mock('../../api/assessments', () => ({
     },
     file_list: [
       {
+        file_id: 'cf_low123',
+        path: 'frontend/vite.config.ts',
+        old_path: null,
+        status: 'modified',
+        additions: 4,
+        deletions: 1,
+        risk_level: 'low',
+        coverage_status: 'unknown',
+        review_status: 'unreviewed',
+        agent_sources: ['git_diff'],
+        diff_fingerprint: 'sha256:low',
+        highest_hunk_priority: 41,
+        mismatch_count: 0,
+        weakest_test_evidence_grade: 'inferred',
+      },
+      {
         file_id: 'cf_abc123',
         path: 'backend/app/main.py',
         old_path: null,
@@ -45,6 +79,9 @@ vi.mock('../../api/assessments', () => ({
         review_status: 'unreviewed',
         agent_sources: ['git_diff'],
         diff_fingerprint: 'sha256:abc',
+        highest_hunk_priority: 92,
+        mismatch_count: 1,
+        weakest_test_evidence_grade: 'claimed',
       },
       {
         file_id: 'cf_test123',
@@ -77,6 +114,9 @@ vi.mock('../../api/assessments', () => ({
       review_status: 'unreviewed',
       agent_sources: ['git_diff'],
       diff_fingerprint: 'sha256:abc',
+      highest_hunk_priority: 92,
+      mismatch_count: 1,
+      weakest_test_evidence_grade: 'claimed',
     },
     diff_hunks: [{
       hunk_id: 'hunk_001',
@@ -103,6 +143,55 @@ vi.mock('../../api/assessments', () => ({
       evidence_refs: ['git_diff'],
       unknowns: ['Codex agent assessment has not run.'],
     },
+    agent_claims: [
+      {
+        claim_id: 'claim_001',
+        type: 'test',
+        text: 'Codex said it added coverage for the changed route.',
+        source: 'codex',
+        session_id: 'sess_123',
+        message_ref: 'assistant_msg_7',
+        tool_call_ref: '',
+        related_files: ['backend/app/main.py'],
+        confidence: 'medium',
+      },
+    ],
+    mismatches: [
+      {
+        mismatch_id: 'mm_001',
+        kind: 'claimed_tested_but_no_executed_test_evidence',
+        claim_id: 'claim_001',
+        severity: 'high',
+        explanation: 'Agent claimed test coverage, but no executed test evidence was found.',
+        fact_refs: ['no_execution_record'],
+        provenance_refs: [],
+      },
+    ],
+    provenance_refs: [
+      {
+        source: 'codex',
+        session_id: 'sess_123',
+        message_ref: 'assistant_msg_7',
+        tool_call_ref: 'apply_patch',
+        command: '',
+        file_path: 'backend/app/main.py',
+        hunk_id: 'hunk_001',
+        confidence: 'medium',
+      },
+    ],
+    hunk_review_items: [
+      {
+        hunk_id: 'hunk_001',
+        file_id: 'cf_abc123',
+        path: 'backend/app/main.py',
+        priority: 92,
+        risk_level: 'high',
+        reasons: ['public API changed', 'claimed tests have no execution evidence'],
+        fact_basis: ['route_reference', 'no_execution_record'],
+        provenance_refs: [],
+        mismatch_ids: ['mm_001'],
+      },
+    ],
     review_state: {
       review_status: 'unreviewed',
       diff_fingerprint: 'sha256:abc',
@@ -118,13 +207,32 @@ describe('AssessmentReviewPage', () => {
     render(<AssessmentReviewPage />)
 
     expect(await screen.findByText('本次变更包含 1 个待审查文件。')).toBeInTheDocument()
+    expect(screen.getByText('代码变更总览')).toBeInTheDocument()
+    expect(screen.getByText('Codex 聊天和操作记录')).toBeInTheDocument()
+    expect(screen.getByText('测试执行情况')).toBeInTheDocument()
+    expect(screen.getByText('Agent 总体评估')).toBeInTheDocument()
     expect(screen.getAllByText('backend/app/main.py').length).toBeGreaterThan(0)
+    const changedFilesPanel = screen.getByLabelText('changed-files')
+    expect(changedFilesPanel.textContent?.indexOf('backend/app/main.py')).toBeLessThan(
+      changedFilesPanel.textContent?.indexOf('frontend/vite.config.ts') ?? Number.POSITIVE_INFINITY,
+    )
     expect(screen.queryByText('backend/tests/test_main.py')).not.toBeInTheDocument()
     await waitFor(() => expect(screen.getByText(/new line/)).toBeInTheDocument())
     expect(screen.getByText('Rule-based fallback')).toBeInTheDocument()
     expect(screen.getByText('Verdict')).toBeInTheDocument()
-    expect(screen.getByText('Why')).toBeInTheDocument()
-    expect(screen.getByText('Impact')).toBeInTheDocument()
-    expect(screen.getAllByText('Tests').length).toBeGreaterThan(0)
+    expect(screen.getByText('Agent Claims')).toBeInTheDocument()
+    expect(screen.getByText('Mismatches')).toBeInTheDocument()
+    expect(screen.getByText('Test Evidence')).toBeInTheDocument()
+    expect(screen.getAllByText('Provenance').length).toBeGreaterThan(0)
+    expect(screen.getByText('working tree')).toBeInTheDocument()
+    expect(screen.getByText('needs tests · 1 mismatch · 1 unreviewed')).toBeInTheDocument()
+    expect(screen.getByText(/暂不建议提交：需要补强测试证据后再提交。/)).toBeInTheDocument()
+    expect(screen.getByText(/优先看 backend\/app\/main.py hunk_001 \(P92\)：public API changed/)).toBeInTheDocument()
+    expect(screen.getByText('0 missing, 1 weak evidence, coverage unknown')).toBeInTheDocument()
+    expect(screen.getByText('capture partial, provenance partial, confidence medium')).toBeInTheDocument()
+    expect(screen.getAllByText('Priority 92').length).toBeGreaterThan(0)
+    expect(screen.getByText('claimed_tested_but_no_executed_test_evidence')).toBeInTheDocument()
+    expect(screen.getByText('Evidence grade: claimed')).toBeInTheDocument()
+    expect(screen.getByText(/sess_123/)).toBeInTheDocument()
   })
 })

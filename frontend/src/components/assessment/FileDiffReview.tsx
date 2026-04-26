@@ -3,6 +3,7 @@ import styles from './FileDiffReview.module.css'
 
 export function FileDiffReview({ detail }: { detail: ChangedFileDetail | null }) {
   if (!detail) return <main className={styles.panel}>Select a file to review its diff.</main>
+  const hunkItems = detail.hunk_review_items ?? []
   return (
     <main className={styles.panel} aria-label="file-diff">
       <header>
@@ -11,7 +12,15 @@ export function FileDiffReview({ detail }: { detail: ChangedFileDetail | null })
       </header>
       <div className={styles.diff}>
         {detail.diff_hunks.map(hunk => (
-          <section key={hunk.hunk_id}>
+          <section key={hunk.hunk_id} id={hunk.hunk_id} className={styles.hunk}>
+            <div className={styles.hunkHeader}>
+              <span>{hunk.hunk_id}</span>
+              {hunkItems
+                .filter(item => item.hunk_id === hunk.hunk_id)
+                .map(item => (
+                  <strong key={item.hunk_id}>Priority {item.priority}</strong>
+                ))}
+            </div>
             {hunk.lines.map((line, index) => (
               <pre key={`${hunk.hunk_id}-${index}`} className={styles[line.type]}>
                 {line.type === 'add' ? '+' : line.type === 'remove' ? '-' : ' '}

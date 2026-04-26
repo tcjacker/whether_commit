@@ -6,6 +6,8 @@ import { FileDiffReview } from '../components/assessment/FileDiffReview'
 import { FileEvidencePanel } from '../components/assessment/FileEvidencePanel'
 import { useAssessmentRebuild } from '../hooks/useAssessmentRebuild'
 import type { AssessmentManifest, ChangedFileDetail, ChangedFileSummary } from '../types/api'
+import { withV02PreviewDetail, withV02PreviewManifest } from '../utils/assessmentPreview'
+import { sortFilesByReviewPriority } from '../utils/assessmentSorting'
 import { isTestFile } from '../utils/testFiles'
 import styles from './AssessmentReviewPage.module.css'
 
@@ -14,6 +16,7 @@ function getParams() {
   return {
     repoKey: p.get('repo_key') ?? 'divide_prd_to_ui',
     workspacePath: p.get('workspace_path') ?? '',
+    previewV02: p.get('aca_preview') === 'v02',
   }
 }
 
@@ -22,7 +25,7 @@ function minimumVisibleDelay(ms = 900) {
 }
 
 export function TestChangesPage() {
-  const { repoKey, workspacePath } = getParams()
+  const { repoKey, workspacePath, previewV02 } = getParams()
   const [manifest, setManifest] = useState<AssessmentManifest | null>(null)
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null)
   const [detail, setDetail] = useState<ChangedFileDetail | null>(null)
@@ -31,10 +34,12 @@ export function TestChangesPage() {
 
   const loadAssessment = useCallback(() => fetchLatestAssessment(repoKey, workspacePath)
     .then(data => {
-      setManifest(data)
-      setSelectedFileId(data.file_list.find(file => isTestFile(file.path))?.file_id ?? null)
-      return data
-    }), [repoKey, workspacePath])
+      const assessment = previewV02 ? withV02PreviewManifest(data) : data
+      const testFiles = sortFilesByReviewPriority(assessment.file_list.filter(file => isTestFile(file.path)))
+      setManifest(assessment)
+      setSelectedFileId(testFiles[0]?.file_id ?? null)
+      return assessment
+    }), [repoKey, workspacePath, previewV02])
 
   const { rebuild, isRebuilding, job, rebuildError } = useAssessmentRebuild(repoKey, workspacePath, loadAssessment)
 
@@ -44,15 +49,11 @@ export function TestChangesPage() {
   }, [loadAssessment])
 
   useEffect(() => {
-    if (rebuildError) setError(rebuildError)
-  }, [rebuildError])
-
-  useEffect(() => {
     if (!manifest || !selectedFileId) return
     fetchAssessmentFileDetail(repoKey, manifest.assessment_id, selectedFileId, workspacePath)
-      .then(setDetail)
+      .then(data => setDetail(previewV02 ? withV02PreviewDetail(data) : data))
       .catch(err => setError(String(err)))
-  }, [repoKey, workspacePath, manifest, selectedFileId])
+  }, [repoKey, workspacePath, manifest, selectedFileId, previewV02])
 
   const handleSelect = (file: ChangedFileSummary) => {
     setSelectedFileId(file.file_id)
@@ -81,10 +82,12 @@ export function TestChangesPage() {
       .finally(() => setAgentRunningFileId(null))
   }
 
-  if (error) return <div className={styles.center}>{error}</div>
+  const displayError = error ?? rebuildError
+
+  if (displayError) return <div className={styles.center}>{displayError}</div>
   if (!manifest) return <div className={styles.center}>Loading test changes...</div>
 
-  const testFiles = manifest.file_list.filter(file => isTestFile(file.path))
+  const testFiles = sortFilesByReviewPriority(manifest.file_list.filter(file => isTestFile(file.path)))
 
   return (
     <div className={styles.page}>

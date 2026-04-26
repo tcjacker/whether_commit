@@ -203,7 +203,10 @@ def test_codex_session_reader_chunks_and_classifies_long_conversation(tmp_path):
     ]
     _write_jsonl(session_path, rows)
 
-    evidence = CodexSessionReader(codex_home=codex_home).collect(
+    evidence = CodexSessionReader(
+        codex_home=codex_home,
+        llm_compressor=FakeConversationCompressor(None),
+    ).collect(
         workspace_path=str(workspace),
         since_timestamp=1777111200,
         max_messages=8,
@@ -300,3 +303,67 @@ def test_codex_session_reader_falls_back_when_llm_compressor_fails(tmp_path):
 
     assert any("规则 fallback" in item for item in evidence["classified_summary"]["goals"])
     assert evidence["classified_summary_source"] == "rules"
+
+
+def test_codex_session_reader_extracts_message_tool_command_and_patch_refs(tmp_path):
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    codex_home = tmp_path / "codex"
+    session_path = codex_home / "sessions" / "2026" / "04" / "25" / "rollout.jsonl"
+    _write_jsonl(
+        session_path,
+        [
+            {
+                "timestamp": "2026-04-25T10:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "sess_1", "cwd": str(workspace)},
+            },
+            {
+                "timestamp": "2026-04-25T10:01:00Z",
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "id": "msg_user_1",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "请修改 frontend/src/api/client.ts 并补测试。"}],
+                },
+            },
+            {
+                "timestamp": "2026-04-25T10:02:00Z",
+                "type": "response_item",
+                "payload": {
+                    "type": "function_call",
+                    "id": "call_patch_1",
+                    "call_id": "call_patch_1",
+                    "name": "apply_patch",
+                    "arguments": "*** Begin Patch\n*** Update File: frontend/src/api/client.ts\n@@\n-old\n+new\n*** End Patch",
+                },
+            },
+            {
+                "timestamp": "2026-04-25T10:03:00Z",
+                "type": "response_item",
+                "payload": {
+                    "type": "function_call",
+                    "id": "call_exec_1",
+                    "call_id": "call_exec_1",
+                    "name": "exec_command",
+                    "arguments": json.dumps({"cmd": "npm test -- api"}),
+                },
+            },
+        ],
+    )
+
+    evidence = CodexSessionReader(codex_home=codex_home).collect(
+        workspace_path=str(workspace),
+        since_timestamp=1777111200,
+    )
+
+    assert evidence["message_refs"][0]["message_ref"] == "msg_user_1"
+    assert evidence["message_refs"][0]["role"] == "user"
+    assert evidence["tool_calls"][0]["tool_call_ref"] == "call_patch_1"
+    assert evidence["tool_calls"][0]["tool_name"] == "apply_patch"
+    assert evidence["tool_calls"][0]["related_files"] == ["frontend/src/api/client.ts"]
+    assert evidence["commands"][0]["command"] == "npm test -- api"
+    assert evidence["commands"][0]["tool_call_ref"] == "call_exec_1"
+    assert evidence["file_refs"][0]["file_path"] == "frontend/src/api/client.ts"
+    assert evidence["file_refs"][0]["tool_call_ref"] == "call_patch_1"

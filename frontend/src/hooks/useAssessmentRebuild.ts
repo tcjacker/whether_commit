@@ -16,9 +16,13 @@ export function useAssessmentRebuild(repoKey: string, workspacePath: string, rel
       fetchJob(job.job_id)
         .then(async nextJob => {
           setJob(nextJob)
-          if (nextJob.status === 'success') {
-            await reloadAssessment()
-            setIsRebuilding(false)
+          if (nextJob.status === 'success' || nextJob.status === 'partial_success') {
+            try {
+              await reloadAssessment()
+              setJob(null)
+            } finally {
+              setIsRebuilding(false)
+            }
           }
           if (nextJob.status === 'failed') {
             setError(nextJob.message || 'Assessment rebuild failed.')
@@ -34,6 +38,7 @@ export function useAssessmentRebuild(repoKey: string, workspacePath: string, rel
   }, [job, reloadAssessment])
 
   const rebuild = async () => {
+    if (isRebuilding) return
     setError(null)
     setIsRebuilding(true)
     try {

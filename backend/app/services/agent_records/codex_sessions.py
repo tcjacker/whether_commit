@@ -176,6 +176,10 @@ class CodexSessionReader:
         workspace = str(Path(workspace_path).resolve())
         user_messages: List[str] = []
         assistant_messages: List[str] = []
+        message_refs: List[Dict[str, Any]] = []
+        tool_calls: List[Dict[str, Any]] = []
+        commands: List[Dict[str, Any]] = []
+        file_refs: List[Dict[str, Any]] = []
         session_ids: List[str] = []
         source_paths: List[str] = []
 
@@ -191,6 +195,10 @@ class CodexSessionReader:
             if parsed["session_id"] and parsed["session_id"] not in session_ids:
                 session_ids.append(parsed["session_id"])
             source_paths.append(str(session_path))
+            message_refs.extend(parsed.get("message_refs", []))
+            tool_calls.extend(parsed.get("tool_calls", []))
+            commands.extend(parsed.get("commands", []))
+            file_refs.extend(parsed.get("file_refs", []))
             for message in parsed["messages"]:
                 if message["role"] == "user":
                     user_messages.append(message["text"])
@@ -221,6 +229,10 @@ class CodexSessionReader:
             "session_ids": session_ids,
             "user_messages": user_messages,
             "assistant_messages": assistant_messages,
+            "message_refs": message_refs[:max_messages],
+            "tool_calls": tool_calls[:60],
+            "commands": commands[:40],
+            "file_refs": self._rank_file_refs(file_refs)[:80],
             "conversation_chunks": conversation_chunks,
             "classified_summary": classified_summary,
             "classified_summary_source": "codex_llm" if llm_summary else "rules",
@@ -280,17 +292,41 @@ class CodexSessionReader:
             return {"session_id": session_id, "messages": []}
 
         messages: List[Dict[str, str]] = []
+        message_refs: List[Dict[str, Any]] = []
+        tool_calls: List[Dict[str, Any]] = []
+        commands: List[Dict[str, Any]] = []
+        file_refs: List[Dict[str, Any]] = []
         for row in rows:
             timestamp = self._timestamp(row.get("timestamp"))
             if since_timestamp is not None and timestamp is not None and timestamp < since_timestamp:
                 continue
             message = self._message_from_row(row)
             if not message:
+                tool_call = self._tool_call_from_row(row, session_id=session_id)
+                if tool_call:
+                    tool_calls.append(tool_call)
+                    commands.extend(self._commands_from_tool_call(tool_call))
+                    file_refs.extend(self._file_refs_from_tool_call(tool_call))
                 continue
-            if any(existing == message for existing in messages):
-                continue
-            messages.append(message)
-        return {"session_id": session_id, "messages": messages[-remaining:]}
+            if not any(existing == message for existing in messages):
+                messages.append(message)
+                message_refs.append(
+                    {
+                        "session_id": session_id,
+                        "message_ref": message.get("message_ref", ""),
+                        "role": message["role"],
+                        "text": message["text"],
+                    }
+                )
+                file_refs.extend(self._file_refs_from_message(message, session_id=session_id))
+        return {
+            "session_id": session_id,
+            "messages": messages[-remaining:],
+            "message_refs": message_refs[-remaining:],
+            "tool_calls": tool_calls,
+            "commands": commands,
+            "file_refs": file_refs,
+        }
 
     def _message_from_row(self, row: Dict[str, Any]) -> Dict[str, str] | None:
         payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
@@ -302,7 +338,112 @@ class CodexSessionReader:
         text = self._content_text(payload.get("content"))
         if not text or self._is_noise(text):
             return None
-        return {"role": role, "text": text[:700]}
+        return {
+            "role": role,
+            "text": text[:700],
+            "message_ref": str(payload.get("id") or payload.get("message_id") or row.get("id") or ""),
+        }
+
+    def _tool_call_from_row(self, row: Dict[str, Any], *, session_id: str) -> Dict[str, Any] | None:
+        payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+        if row.get("type") != "response_item" or payload.get("type") != "function_call":
+            return None
+        tool_name = str(payload.get("name") or payload.get("tool_name") or "")
+        if not tool_name:
+            return None
+        raw_arguments = payload.get("arguments") or payload.get("input") or payload.get("args") or ""
+        arguments_text = raw_arguments if isinstance(raw_arguments, str) else json.dumps(raw_arguments, ensure_ascii=False)
+        tool_call_ref = str(payload.get("call_id") or payload.get("id") or row.get("id") or "")
+        related_files = self._paths_from_text(arguments_text)
+        return {
+            "session_id": session_id,
+            "tool_call_ref": tool_call_ref,
+            "tool_name": tool_name,
+            "arguments": arguments_text[:2000],
+            "related_files": related_files,
+        }
+
+    def _commands_from_tool_call(self, tool_call: Dict[str, Any]) -> List[Dict[str, Any]]:
+        tool_name = str(tool_call.get("tool_name") or "").lower()
+        if "exec" not in tool_name and "command" not in tool_name:
+            return []
+        command = self._command_from_arguments(str(tool_call.get("arguments") or ""))
+        if not command:
+            return []
+        return [
+            {
+                "session_id": tool_call.get("session_id", ""),
+                "tool_call_ref": tool_call.get("tool_call_ref", ""),
+                "command": command,
+                "related_files": self._paths_from_text(command),
+            }
+        ]
+
+    def _file_refs_from_tool_call(self, tool_call: Dict[str, Any]) -> List[Dict[str, Any]]:
+        refs: List[Dict[str, Any]] = []
+        tool_name = str(tool_call.get("tool_name") or "")
+        for path in tool_call.get("related_files", []):
+            refs.append(
+                {
+                    "session_id": tool_call.get("session_id", ""),
+                    "message_ref": "",
+                    "tool_call_ref": tool_call.get("tool_call_ref", ""),
+                    "source": f"tool:{tool_name}",
+                    "file_path": path,
+                    "confidence": "high" if "apply_patch" in tool_name else "medium",
+                }
+            )
+        return refs
+
+    def _file_refs_from_message(self, message: Dict[str, str], *, session_id: str) -> List[Dict[str, Any]]:
+        return [
+            {
+                "session_id": session_id,
+                "message_ref": message.get("message_ref", ""),
+                "tool_call_ref": "",
+                "source": f"message:{message['role']}",
+                "file_path": path,
+                "confidence": "medium",
+            }
+            for path in self._paths_from_text(message.get("text", ""))
+        ]
+
+    def _command_from_arguments(self, arguments: str) -> str:
+        try:
+            parsed = json.loads(arguments)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, dict):
+            for key in ("cmd", "command"):
+                value = parsed.get(key)
+                if isinstance(value, str):
+                    return " ".join(value.split())[:500]
+        return ""
+
+    def _paths_from_text(self, text: str) -> List[str]:
+        candidates = re.findall(
+            r"(?:[A-Za-z0-9_.-]+/)+(?:[A-Za-z0-9_.-]+)(?:\.[A-Za-z0-9_.-]+)?",
+            text,
+        )
+        paths: List[str] = []
+        for candidate in candidates:
+            path = candidate.strip("`'\"),.:;")
+            if not path or "://" in path or path.startswith("/"):
+                continue
+            if path not in paths:
+                paths.append(path)
+        return paths[:12]
+
+    def _rank_file_refs(self, refs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        confidence_rank = {"high": 0, "medium": 1, "low": 2}
+        return sorted(
+            refs,
+            key=lambda ref: (
+                confidence_rank.get(str(ref.get("confidence") or "low"), 2),
+                0 if ref.get("tool_call_ref") else 1,
+                str(ref.get("file_path") or ""),
+            ),
+        )
 
     def _content_text(self, content: Any) -> str:
         parts: List[str] = []
