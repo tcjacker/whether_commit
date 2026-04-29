@@ -15,9 +15,12 @@ dist/
 .env
 .env.*
 backend/.env.reasoning.local
+!backend/.env.reasoning.example
 
 # Data snapshots (local only)
 data/
+backend/data/
+.pytest_cache/
 
 # IDE
 .idea/
@@ -25,3 +28,4 @@ data/
 .DS_Store
 .superpowers/
 .worktrees/
+docs/superpowers/
