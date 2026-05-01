@@ -1,197 +1,362 @@
-# Pre-commit Review and Agent Context Design
+# Pre-commit Review Console Design
 
-## Thesis
+## 1. Product Thesis
 
-This project should evolve into a local pre-commit review console backed by a language-aware code context layer for coding agents.
+This project should first become a local pre-commit review console. It should not replace CI, compile every language, or promise that a change is correct. It should answer a narrower question:
 
-The review console is the product surface. It helps a developer decide whether a pending change is ready to commit. The code context layer is the durable technical base. It turns repository structure, AST entities, diffs, tests, and agent activity into evidence that both the UI and agents can query.
+> Given the evidence collected for the current pending change, are there known blockers or unresolved review risks before commit?
 
-## Goals
+The long-term technical direction remains a language-aware code context layer for agents, but that layer must grow from the review loop. The product surface validates which semantic facts are actually useful. The semantic layer then turns those facts into durable context for both reviewers and coding agents.
 
-- Provide a local quality gate before commit.
-- Help reviewers inspect changed files in risk order.
-- Explain each review signal with traceable evidence.
-- Preserve reviewer decisions and follow-up state.
-- Build a language-neutral semantic model that can support Python first, then TypeScript, Go, and Java.
-- Expose structured context that an agent can use while editing, reviewing, or explaining code.
+## 2. Review Target Semantics
 
-## Non-goals
+Pre-commit review must define what is being reviewed. Git commits the index, not the whole working tree, so the system must make the target explicit.
 
-- Do not build a full CI replacement in the first phase.
-- Do not attempt complete compiler-grade understanding for every language.
-- Do not add multi-user collaboration, permissions, or hosted storage yet.
-- Do not make LLM summaries the source of truth.
-- Do not support every language adapter before the core schema is stable.
+| Target | Meaning | MVP default | Notes |
+| --- | --- | --- | --- |
+| `staged_only` | Review only staged changes that would enter the next commit. | Yes | This is the default pre-commit mode. |
+| `working_tree_all` | Review staged, unstaged, and selected untracked files. | No | Useful for exploratory review before staging. |
+| `staged_plus_unstaged` | Review tracked staged and unstaged changes, excluding untracked files by default. | No | Useful when users want one review before choosing staged hunks. |
 
-## Product Direction
+Untracked files should be included only when the request sets `include_untracked=true`. The UI must label untracked evidence separately because untracked files are not part of a commit until staged.
 
-The first product direction is a pre-commit quality gate and AI-assisted review console.
+The backend should capture enough repository state to detect stale analysis:
 
-The user flow should be:
+```python
+class WorkspaceFingerprint(BaseModel):
+    repo_head_sha: str
+    base_ref: str
+    index_tree_hash: str | None = None
+    working_tree_fingerprint: str
+    review_target: Literal["staged_only", "working_tree_all", "staged_plus_unstaged"]
+    include_untracked: bool
+```
 
-1. A developer opens a local repository with pending changes.
-2. The developer triggers a rebuild.
-3. The backend captures the working tree, analyzes diffs, maps changes to code entities, gathers verification evidence, and builds an assessment.
-4. The UI presents a clear decision: commit-ready, needs manual review, or not recommended to commit.
-5. The developer reviews files in priority order.
-6. For each file, the UI shows the diff, changed entities, related tests, evidence quality, risks, and agent reasoning.
-7. The developer marks files as reviewed, needs follow-up, needs recheck, or false positive.
-8. The final summary explains remaining blockers and produces a compact review checklist.
+If the current target fingerprint differs from the snapshot fingerprint, the UI must show that the assessment is stale and require rebuild before returning `no_known_blockers`.
 
-The second product direction is a code context layer for agents.
+## 3. Decision Policy
 
-The agent-facing layer should answer questions such as:
+The final decision is a policy result, not UI copy. The product should use conservative names that avoid overclaiming.
 
-- Which changed files are highest risk?
-- Which changed entities lack executed test evidence?
-- Which entrypoints or tests are related to this diff hunk?
-- What did the agent claim to verify, and what evidence supports that claim?
-- Which files should be reviewed before commit?
+| Decision | Meaning |
+| --- | --- |
+| `no_known_blockers` | The collected evidence shows no blocking risk. Residual unknowns remain visible. |
+| `needs_review` | The change may be acceptable, but unresolved review work or weak evidence remains. |
+| `not_recommended` | A blocking condition exists, or the analysis is stale enough that the result cannot be trusted. |
 
-## Architecture Direction
+Policy precedence is highest severity wins.
 
-The system should keep the current FastAPI backend and React frontend, but split the backend concepts more clearly:
+| Condition | Decision impact | Rationale |
+| --- | --- | --- |
+| Executed test evidence failed. | `not_recommended` | Known failing verification is a blocker. |
+| Assessment target is stale relative to current index or working tree. | `not_recommended` | The analysis no longer describes the selected target. |
+| Rebuild failed before producing a usable assessment. | `not_recommended` | The system cannot provide current evidence. |
+| Supported-language adapter failed on a changed supported-language file. | At most `needs_review` | Fall back to file review, but do not claim no blockers. |
+| High-risk hunk or signal remains unreviewed. | At most `needs_review` | Human review is still required. |
+| Evidence is inferred-only for a high-risk file. | At most `needs_review` | The relationship is useful but not strong enough to clear risk. |
+| Agent claimed verification with no matching execution evidence. | At most `needs_review` | Claims are not verification. |
+| Large or cross-module change has no executed or inferred evidence. | At most `needs_review` | The system should surface uncertainty. |
+| No failed evidence, no stale analysis, all high-risk items reviewed, and residual unknowns accepted. | `no_known_blockers` | The system found no blocker under current evidence. |
 
-- Capture layer: reads git status, diffs, untracked files, and workspace metadata.
-- Language analysis layer: extracts entities, relations, entrypoints, and test facts from source code.
-- Change mapping layer: maps diff hunks to language entities.
-- Verification layer: records executed, inferred, claimed, missing, and unknown test evidence.
-- Assessment layer: combines change, graph, verification, and agent activity into review signals.
-- Review state layer: stores human decisions and notes separately from regenerated analysis.
-- Query layer: serves both UI endpoints and future agent context endpoints.
+`no_known_blockers` must never mean "safe to merge" or "tests guarantee correctness." It means the local review gate found no known blocker.
 
-The assessment layer should not depend on Python-specific AST shapes. Language adapters should emit the same intermediate schema.
+## 4. Evidence Model
 
-## Semantic Model
+Evidence must carry provenance. Without source metadata, labels such as executed, inferred, or claimed are not trustworthy.
 
-The core model should be language-neutral:
+```python
+class EvidenceSource(BaseModel):
+    source_id: str
+    source_type: Literal[
+        "git_diff",
+        "test_run",
+        "coverage",
+        "static_analysis",
+        "agent_log",
+        "user_review",
+    ]
+    repo_head_sha: str
+    base_ref: str
+    working_tree_fingerprint: str
+    confidence: float
+    command: str | None = None
+    exit_code: int | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    tool_name: str | None = None
+    tool_version: str | None = None
+    raw_output_ref: str | None = None
+```
 
-- `CodeEntity`: a module, class, function, method, component, interface, type, route handler, job, or command.
-- `Relation`: a dependency between entities, such as imports, calls, implements, extends, renders, routes_to, or tests.
-- `Entrypoint`: a user-facing or system-facing execution boundary, such as an API route, CLI command, background job, UI route, or event handler.
-- `ChangedEntity`: a code entity touched by a diff hunk, with path, line range, hunk id, and confidence.
-- `TestEvidence`: evidence that a test is related to or executed for a change.
-- `ReviewSignal`: a risk or confidence signal derived from change size, entity role, missing tests, weak evidence, or mismatched agent claims.
-- `AgentActivity`: claimed actions from Codex, Claude, git-only fallback, or other local agent logs.
+Evidence types:
 
-Adapters can add language-specific metadata, but the assessment builder should operate on these shared concepts.
+| Evidence type | Source | Strength | Invalidates when |
+| --- | --- | --- | --- |
+| `GitDiffEvidence` | `git_diff` | Strong for what changed, weak for correctness. | Target fingerprint changes. |
+| `TestRunEvidence` | `test_run` | Strong when command, exit code, and target fingerprint match. | Target fingerprint or relevant test command changes. |
+| `InferredRelationEvidence` | `static_analysis` | Medium or low depending on relation strength. | Adapter version, target fingerprint, or source entity fingerprint changes. |
+| `CoverageEvidence` | `coverage` | Strong when tied to a current test run. | Test run or target fingerprint changes. |
+| `AgentClaim` | `agent_log` | Claim only, not verification. | Agent log source changes or target fingerprint mismatch. |
+| `UserReviewEvidence` | `user_review` | Strong for human acceptance of a hunk or signal. | Reviewed fingerprint changes. |
 
-## Language Roadmap
+Agent claims must be modeled separately from execution evidence:
 
-Python remains the reference adapter because the backend already has AST extraction and tests.
+```python
+class AgentClaim(BaseModel):
+    claim_id: str
+    source_id: str
+    claim_type: Literal["ran_test", "inspected_file", "fixed_bug", "verified_behavior"]
+    text: str
+    related_files: list[str]
+    related_commands: list[str]
 
-TypeScript should be the next adapter. It can be validated against the existing frontend codebase and is useful for component, route, hook, and API-client changes.
+class ClaimAssessment(BaseModel):
+    claim_id: str
+    status: Literal["supported", "contradicted", "unverified"]
+    supporting_evidence_ids: list[str]
+    notes: list[str]
+```
 
-Go should follow TypeScript. Its standard AST tooling is stable, and test naming conventions are relatively analyzable.
+The UI can show a claim, but only `TestRunEvidence` with matching command and exit code can prove execution.
 
-Java should come after the shared model is proven. Java has high value, but Spring annotations, Maven and Gradle layouts, generated code, and interface-heavy call paths make it more expensive.
+## 5. Snapshot Model
 
-Each new language should ship only when it can produce useful review evidence through the shared schema. Full language coverage is less important than review-relevant coverage.
+Analysis output should be immutable. Review state should be separate and portable across compatible rebuilds.
 
-## MVP Scope
+```python
+class AnalysisSnapshot(BaseModel):
+    snapshot_id: str
+    repo_path: str
+    base_ref: str
+    head_sha: str
+    index_tree_hash: str | None = None
+    working_tree_fingerprint: str
+    review_target: Literal["staged_only", "working_tree_all", "staged_plus_unstaged"]
+    created_at: datetime
+    analysis_version: str
+    adapter_versions: dict[str, str]
+    status: Literal["running", "completed", "partial", "failed", "stale"]
+```
 
-The first implementation phase should include:
+The UI must display stale state whenever the current target fingerprint differs from the snapshot. A stale snapshot can still be inspected, but it cannot produce `no_known_blockers`.
 
-- A clearer assessment decision: commit-ready, needs review, or do not commit yet.
-- Review state persistence for each changed file.
-- Evidence grades that distinguish executed, inferred, claimed, missing, and unknown verification.
-- A stable review priority calculation.
-- A language-neutral schema for code entities, changed entities, relations, entrypoints, test evidence, and review signals.
-- Python adapter alignment with the new schema.
-- Initial TypeScript adapter support for files, imports, functions, React components, hooks, and test files.
-- UI changes that show decision, risk reason, evidence grade, and review state without hiding the diff.
-- Agent context endpoints that expose the highest-risk files, weak evidence, changed entities, and review checklist.
+## 6. Review State Model
 
-## Deferred Scope
+File-level review state is not enough. The system should preserve review decisions at the smallest stable review unit it can identify.
 
-The following should wait until the MVP is reliable:
+| State level | Purpose | Fingerprint |
+| --- | --- | --- |
+| `FileReviewState` | Tracks overall file disposition and notes. | File diff fingerprint. |
+| `HunkReviewState` | Tracks whether a specific diff hunk was reviewed. | Hunk content and line context fingerprint. |
+| `SignalReviewState` | Tracks acceptance or dismissal of a risk, missing evidence item, or claim mismatch. | Signal type, target id, source evidence ids, and message fingerprint. |
 
-- Full Java and Go support.
-- CI provider integrations.
-- Hosted mode.
-- Multi-user review collaboration.
-- Historical trend dashboards.
-- Large architecture diagrams.
-- Automated commit creation or push flows.
-- Broad LLM-generated architecture summaries.
+Review statuses:
 
-## Data Flow
+- `unreviewed`
+- `reviewed`
+- `needs_follow_up`
+- `needs_recheck`
+- `false_positive`
+- `accepted_risk`
 
-The rebuild flow should remain asynchronous:
+Invalidation rules:
 
-1. Capture workspace snapshot.
-2. Generate language graph snapshots.
-3. Generate change analysis from git diff and diff hunk mapping.
-4. Collect verification evidence.
-5. Build review graph and assessment.
-6. Save immutable analysis snapshots.
-7. Preserve review state across compatible rebuilds when diff fingerprints match.
+- Preserve `FileReviewState` only when the file diff fingerprint matches.
+- Preserve `HunkReviewState` only when the hunk fingerprint matches.
+- Preserve `SignalReviewState` only when the signal fingerprint and source evidence ids match.
+- If a parent file changes but a hunk or signal fingerprint survives, keep the lower-level state and mark the file as partially reviewed.
 
-Review state should be stored separately from generated assessment data. Rebuilding analysis should not erase human review decisions unless the file diff fingerprint changes.
+This lets rebuilds avoid forcing a full file re-review when only one hunk changed.
 
-## Error Handling
+## 7. MVP-0 Scope
 
-The system should make partial results explicit.
+MVP-0 is a Git-diff-only review console with enough evidence and state handling to validate the product loop.
 
-- If a language adapter fails, the assessment should fall back to file-level diff review.
-- If tests cannot be mapped, evidence should be marked unknown rather than missing.
-- If an agent log cannot be read, the assessment should still use git diff evidence.
-- If a rebuild fails, the UI should show the failed step and the last usable assessment if one exists.
-- If review state cannot be carried forward, the UI should show that a re-review is required.
+| Capability | In MVP-0 | Explicitly deferred |
+| --- | --- | --- |
+| Pending change capture | `staged_only` default, optional working-tree modes. | Hosted repo analysis. |
+| Diff display | File and hunk level. | Full semantic graph display. |
+| Risk ordering | File and hunk heuristics from diff size, path type, deletion/addition mix, config/schema/test path hints. | Language-wide call graph risk. |
+| Evidence grades | Minimal: git diff, executed test command if available, inferred, claimed, missing, unknown. | Coverage ingestion and rich semantic evidence. |
+| Review state | File, hunk, and signal state with fingerprint invalidation. | Multi-user review workflow. |
+| Decision policy | `no_known_blockers`, `needs_review`, `not_recommended`. | Automated commit or push. |
+| Stale detection | Required for selected review target. | Historical trend analysis. |
+| UI loop | Show remaining files, unresolved hunks, weak evidence, and final decision. | Broad architecture diagrams. |
 
-## Testing Strategy
+MVP-0 may use the existing Python adapter opportunistically, but it must not depend on a full semantic graph to be useful.
 
-Backend tests should cover:
+## 8. MVP-1 Python Semantic Evidence
 
-- Schema validation for the language-neutral model.
-- Python adapter output against representative source files.
-- TypeScript adapter output against representative React and utility files.
-- Diff hunk to entity mapping.
-- Evidence grade calculation.
-- Review decision calculation.
-- Review state preservation across rebuilds.
-- Agent context endpoint responses.
+MVP-1 introduces semantic evidence where the current backend is strongest.
 
-Frontend tests should cover:
+Scope:
 
-- Assessment decision rendering.
-- File priority ordering.
-- Evidence grade display.
-- Review state transitions.
-- Rebuild progress and failure states.
+- Define the first version of `CodeEntity`, `ChangedEntity`, `Relation`, `Entrypoint`, and `TestEvidence`.
+- Align the existing Python graph and change adapters with this schema.
+- Map Python diff hunks to functions, classes, methods, FastAPI routes, schemas, jobs, and tests where available.
+- Add relation strength:
+
+```python
+RelationStrength = Literal["direct", "static_inferred", "naming_convention", "agent_claimed"]
+```
+
+Adapter contract:
+
+```python
+class CodeEntity(BaseModel):
+    entity_id: str
+    language: Literal["python", "typescript", "go", "java"]
+    kind: str
+    path: str
+    qualified_name: str
+    display_name: str
+    start_line: int
+    end_line: int
+    stable_fingerprint: str
+    confidence: float
+    metadata: dict[str, Any]
+```
+
+`entity_id` should not rely only on line numbers. It should combine language, path, qualified name, kind, and structural fingerprint so formatting changes do not destroy identity.
+
+## 9. MVP-2 Agent Context API
+
+Agent context should be a read-only facade over stable assessment data, not the same API used by the UI.
+
+Two API facades should exist:
+
+| API | Consumer | Contract |
+| --- | --- | --- |
+| `ReviewReadModelAPI` | UI | Stable, human-readable, paginated, low-noise. |
+| `AgentContextAPI` | Coding agents | Structured, filterable, evidence-linked, machine-readable. |
+
+MVP-2 should expose only high-signal queries:
+
+- Highest-risk files.
+- Unreviewed hunks.
+- Weak or missing evidence.
+- Changed entities.
+- Agent claims with unsupported or contradicted status.
+- Final review checklist.
+
+The API must be read-only in this phase. Any endpoint that sends context to an external model should require explicit opt-in and redaction.
+
+## 10. MVP-3 TypeScript / Vite React Adapter
+
+TypeScript support should start as a narrow adapter for this repository's frontend shape, not a generic TypeScript adapter.
+
+Name: `ViteReactAdapter v0`.
+
+Initial supported paths:
+
+- `frontend/src/components/**`
+- `frontend/src/pages/**`
+- `frontend/src/hooks/**`
+- `frontend/src/api/**`
+- `frontend/src/utils/**`
+- `*.test.ts`
+- `*.test.tsx`
+
+Initial facts:
+
+- Imports and exports.
+- React component declarations.
+- Hook declarations.
+- API client functions.
+- Test files and likely source-file relationship by path and naming convention.
+
+Deferred TypeScript features:
+
+- Next.js routing.
+- React Router route extraction.
+- Barrel export resolution beyond direct local files.
+- Path alias resolution beyond configured Vite aliases.
+- Dynamic import graph.
+- Storybook, Playwright, Jest, and Vitest-specific evidence beyond simple test-file detection.
+
+The adapter should graduate only after it produces useful review evidence for the current frontend without special-casing every file.
+
+## 11. Error Handling and Partial Results
+
+Partial results must affect the decision policy.
+
+| Failure or partial state | User-visible behavior | Decision impact |
+| --- | --- | --- |
+| Language adapter fails on changed supported file. | Show file-level fallback and adapter error. | At most `needs_review`. |
+| Test mapping unavailable. | Mark evidence as `unknown`, not `missing`. | High-risk files remain `needs_review`. |
+| Agent log unavailable. | Show that agent evidence was not loaded. | No penalty by default. |
+| Agent claim unsupported by execution evidence. | Show claim as unverified. | At most `needs_review`. |
+| Rebuild fails before assessment. | Show failed step and last usable snapshot if available. | `not_recommended` for current target. |
+| Snapshot stale. | Show stale banner and required rebuild. | `not_recommended` for current target. |
+| Review state cannot be carried forward. | Mark affected items as needing re-review. | At most `needs_review`. |
+
+The system should prefer explicit uncertainty over false confidence.
+
+## 12. Security and Privacy
+
+The MVP should remain local-first.
+
+- No network upload in MVP-0.
+- Raw command output and agent logs should be stored separately from summarized assessment fields.
+- Secret redaction should run before any LLM summarization or external model call.
+- Reading Codex or Claude logs should be explicit opt-in.
+- Agent context endpoints should be read-only.
+- Snapshot files should avoid embedding unnecessary raw secrets, tokens, customer data, or full command output.
+- Future hosted mode must treat repo path, filenames, diffs, logs, and test output as sensitive data.
+
+## 13. Test Plan
+
+Backend tests:
+
+- Review target selection for staged, working tree, and untracked files.
+- Stale snapshot detection.
+- Decision policy contract tests.
+- Evidence provenance validation.
+- Agent claim versus execution evidence matching.
+- Review state preservation and invalidation at file, hunk, and signal level.
+- Golden fixture tests for representative diffs and generated assessment JSON.
+- Python semantic evidence mapping in MVP-1.
+- Agent context endpoint contract tests in MVP-2.
+
+Decision contract tests should include:
+
+- Failed executed test returns `not_recommended`.
+- Stale snapshot returns `not_recommended`.
+- Adapter failure on changed supported file returns at most `needs_review`.
+- Agent claimed test execution without matching command evidence returns at most `needs_review`.
+- Inferred-only evidence on high-risk file returns at most `needs_review`.
+- Reviewed high-risk items, no failed evidence, and no stale analysis can return `no_known_blockers`.
+
+Frontend tests:
+
+- Decision banner rendering.
+- Stale assessment banner.
+- Remaining review queue.
+- File, hunk, and signal review state transitions.
+- Evidence provenance display.
+- Rebuild failure and last usable snapshot display.
 - Empty and no-pending-change states.
 
-End-to-end smoke tests should run the tool against this repository with known fixture changes.
+End-to-end smoke tests should run this tool against this repository with fixed fixture changes.
 
-## Milestones
+## 14. Milestones
 
-### Milestone 1: Review Loop Hardening
+| Milestone | Focus | Exit criteria |
+| --- | --- | --- |
+| MVP-0 | Git diff review console. | A user can review staged changes, mark unresolved items, detect stale state, and get a conservative decision. |
+| MVP-1 | Python semantic evidence. | Python changed entities and tests enrich review signals without breaking MVP-0. |
+| MVP-2 | Agent context API. | Agents can query high-risk files, weak evidence, changed entities, and checklist data through read-only endpoints. |
+| MVP-3 | Vite React adapter. | The current frontend produces useful component, hook, API, and test evidence. |
+| Later | Go and Java adapters. | Shared schema and policy contracts already hold across Python and Vite React. |
 
-Make the current assessment review flow usable for real local pre-commit review. Add durable review states, clearer decisions, better evidence labels, and failure handling.
+## 15. Success Criteria
 
-### Milestone 2: Shared Semantic Model
+The design is working when:
 
-Introduce the language-neutral entity and evidence schema. Refactor Python analysis output to conform to it while preserving current behavior.
-
-### Milestone 3: TypeScript Adapter
-
-Add TypeScript parsing for review-relevant facts: files, imports, exported functions, React components, hooks, API clients, and colocated tests.
-
-### Milestone 4: Agent Context API
-
-Expose structured query endpoints for agents. Start with highest-risk files, changed entities, weak evidence, and review checklist.
-
-### Milestone 5: Broader Language Support
-
-Add Go and Java only after the shared schema and agent query layer prove useful with Python and TypeScript.
-
-## Success Criteria
-
-The direction is working when:
-
-- A developer can use the tool before commit and understand the remaining risk.
-- Every major review signal has a visible evidence source.
-- Rebuilds preserve useful human review state.
-- Agents can query structured context instead of reading raw diffs alone.
-- Adding TypeScript does not require a separate assessment pipeline.
-- The project can evaluate its own backend and frontend changes with the same workflow.
+- The review target is explicit and defaults to staged changes.
+- The final decision follows a documented policy table.
+- Every evidence item can explain its source, target fingerprint, and confidence.
+- Review state survives compatible rebuilds and invalidates changed hunks or signals.
+- Stale analysis is visible and cannot produce `no_known_blockers`.
+- MVP-0 is useful without TypeScript, Go, Java, or a full semantic graph.
+- Later semantic adapters improve the same review loop instead of creating a parallel product.
