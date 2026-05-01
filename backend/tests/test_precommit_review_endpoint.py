@@ -1,4 +1,5 @@
 import subprocess
+import sys
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -106,3 +107,28 @@ def test_precommit_review_queue_reports_stale_after_staged_change(tmp_path):
     assert response.status_code == 200
     assert response.json()["stale"] is True
     assert response.json()["decision"] == "not_recommended"
+
+
+def test_precommit_verification_run_endpoint_records_failed_command(tmp_path):
+    repo = make_repo(tmp_path)
+    (repo / "backend" / "schema.py").write_text("value = 2\n", encoding="utf-8")
+    run_git(repo, "add", "backend/schema.py")
+    snapshot = client.post("/api/precommit-review/rebuild", json={"workspace_path": str(repo)}).json()
+
+    response = client.post(
+        "/api/verification/run",
+        json={
+            "workspace_path": str(repo),
+            "snapshot_id": snapshot["snapshot_id"],
+            "command": f"{sys.executable} -c 'import sys; sys.exit(1)'",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "failed"
+
+    run_id = response.json()["run_id"]
+    poll = client.get(f"/api/verification/runs/{run_id}?workspace_path={repo}")
+
+    assert poll.status_code == 200
+    assert poll.json()["exit_code"] == 1

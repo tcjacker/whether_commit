@@ -17,6 +17,7 @@ from app.services.precommit_review.fingerprints import (
 from app.services.precommit_review.policy import decide_review
 from app.services.precommit_review.review_state import ReviewStateStore
 from app.services.precommit_review.risk import score_file_risk
+from app.services.precommit_review.verification import VerificationRunner
 
 
 class PrecommitReviewBuilder:
@@ -44,7 +45,7 @@ class PrecommitReviewBuilder:
             [ReviewSignal.model_validate(signal) for signal in snapshot.get("signals", [])],
             snapshot_is_stale=snapshot["stale"],
         )
-        return snapshot
+        return self._with_verification_signals(snapshot)
 
     def update_signal_state(self, signal_id: str, status: str) -> dict[str, Any]:
         self.state_store.update_signal_state(signal_id, status)
@@ -133,7 +134,7 @@ class PrecommitReviewBuilder:
                 "queue": self._queue(files=files, hunks=hunks, signals=signals),
             }
         )
-        return snapshot
+        return self._with_verification_signals(snapshot)
 
     def _hunk_signal(self, *, file_id: str, hunk_id: str, path: str, risk_band: str) -> ReviewSignal:
         signal_id = signal_id_for_review(
@@ -172,14 +173,25 @@ class PrecommitReviewBuilder:
         return sorted(queue, key=lambda item: (-item["priority"], item["queue_id"]))
 
     def _base_snapshot(self, capture) -> dict[str, Any]:
+        target = {**capture.review_target_fingerprint.__dict__, "digest": capture.review_target_fingerprint.digest}
+        workspace = {**capture.workspace_state_fingerprint.__dict__, "digest": capture.workspace_state_fingerprint.digest}
         return {
             "snapshot_id": capture.snapshot_id,
             "review_target": capture.review_target,
-            "review_target_fingerprint": capture.review_target_fingerprint.__dict__,
-            "workspace_state_fingerprint": capture.workspace_state_fingerprint.__dict__,
+            "review_target_fingerprint": target,
+            "workspace_state_fingerprint": workspace,
             "stale": False,
             "workspace_changed_outside_target": False,
         }
+
+    def _with_verification_signals(self, snapshot: dict[str, Any]) -> dict[str, Any]:
+        signals = [ReviewSignal.model_validate(signal) for signal in snapshot.get("signals", [])]
+        for run in VerificationRunner(self.workspace_path).runs_for_snapshot(snapshot["snapshot_id"]):
+            signals.append(_verification_signal(run))
+        snapshot["signals"] = [signal.model_dump() for signal in signals]
+        snapshot["decision"] = decide_review(signals, snapshot_is_stale=snapshot.get("stale", False))
+        snapshot["queue"] = self._queue(files=snapshot.get("files", []), hunks=snapshot.get("hunks", []), signals=signals)
+        return snapshot
 
     def _save_snapshot(self, snapshot: dict[str, Any]) -> None:
         snapshot_dir = Path(self.workspace_path) / ".precommit-review" / "snapshots" / snapshot["snapshot_id"]
@@ -241,10 +253,53 @@ def _review_state_summary(signals: list[ReviewSignal]) -> str:
 def _target_from_snapshot(snapshot: dict[str, Any]):
     from app.services.precommit_review.capture import ReviewTargetFingerprint
 
-    return ReviewTargetFingerprint(**snapshot["review_target_fingerprint"])
+    payload = {key: value for key, value in snapshot["review_target_fingerprint"].items() if key != "digest"}
+    return ReviewTargetFingerprint(**payload)
 
 
 def _workspace_from_snapshot(snapshot: dict[str, Any]):
     from app.services.precommit_review.capture import WorkspaceStateFingerprint
 
-    return WorkspaceStateFingerprint(**snapshot["workspace_state_fingerprint"])
+    payload = {key: value for key, value in snapshot["workspace_state_fingerprint"].items() if key != "digest"}
+    return WorkspaceStateFingerprint(**payload)
+
+
+def _verification_signal(run: dict[str, Any]) -> ReviewSignal:
+    if run["status"] == "failed":
+        return ReviewSignal(
+            signal_id=f"sig_verification_failed_{run['run_id']}",
+            kind="failed_tool_launched_verification",
+            target_type="evidence",
+            target_id=run["run_id"],
+            severity="blocker",
+            status="open",
+            decision_impact="forces_not_recommended",
+            evidence_ids=[run["run_id"]],
+            policy_rule_id="failed_tool_launched_verification",
+            message=f"Verification command failed: {run['command']}",
+        )
+    if not run["target_aligned"]:
+        return ReviewSignal(
+            signal_id=f"sig_verification_misaligned_{run['run_id']}",
+            kind="target_misaligned_verification",
+            target_type="evidence",
+            target_id=run["run_id"],
+            severity="review",
+            status="open",
+            decision_impact="prevents_no_known_blockers",
+            evidence_ids=[run["run_id"]],
+            policy_rule_id="target_misaligned_verification",
+            message=f"Verification command was executed but target-misaligned: {run['command']}",
+        )
+    return ReviewSignal(
+        signal_id=f"sig_verification_passed_{run['run_id']}",
+        kind="passed_tool_launched_verification",
+        target_type="evidence",
+        target_id=run["run_id"],
+        severity="info",
+        status="resolved",
+        decision_impact="none",
+        evidence_ids=[run["run_id"]],
+        policy_rule_id="passed_tool_launched_verification",
+        message=f"Verification command passed: {run['command']}",
+    )
