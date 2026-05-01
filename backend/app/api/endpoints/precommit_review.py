@@ -58,7 +58,11 @@ async def update_precommit_review_signal(signal_id: str, request: ReviewStateUpd
 @router.post("/hunks/{hunk_id}/state")
 async def update_precommit_review_hunk(hunk_id: str, request: ReviewStateUpdateRequest):
     builder = PrecommitReviewBuilder(request.workspace_path)
-    builder.state_store.update_hunk_state(hunk_id, request.status)
+    snapshot = builder.current()
+    hunk = next((item for item in snapshot.get("hunks", []) if item.get("hunk_id") == hunk_id), None)
+    if not hunk:
+        raise HTTPException(status_code=404, detail="HUNK_NOT_FOUND")
+    builder.state_store.update_hunk_state(hunk["hunk_carryover_key"], request.status)
     return builder.rebuild()
 
 

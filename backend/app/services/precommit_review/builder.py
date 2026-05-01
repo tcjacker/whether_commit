@@ -8,7 +8,12 @@ from typing import Any
 from app.schemas.assessment import ReviewSignal
 from app.services.agentic_change_assessment.diff_parser import parse_unified_diff_hunks
 from app.services.precommit_review.capture import PrecommitCaptureService
-from app.services.precommit_review.fingerprints import file_id_for_review, hunk_id_for_review, signal_id_for_review
+from app.services.precommit_review.fingerprints import (
+    file_id_for_review,
+    hunk_carryover_key_for_review,
+    hunk_resource_id_for_review,
+    signal_id_for_review,
+)
 from app.services.precommit_review.policy import decide_review
 from app.services.precommit_review.review_state import ReviewStateStore
 from app.services.precommit_review.risk import score_file_risk
@@ -79,14 +84,29 @@ class PrecommitReviewBuilder:
                 "risk": {"score": risk.score, "band": risk.band, "reasons": [reason.__dict__ for reason in risk.reasons]},
             }
             files.append(file_record)
+            carryover_counts: dict[str, int] = {}
             for raw_hunk in file_hunks:
-                stable_hunk_id = hunk_id_for_review(file_id, raw_hunk["hunk_fingerprint"])
-                hunk = {**raw_hunk, "hunk_id": stable_hunk_id, "file_id": file_id, "path": path}
+                hunk_carryover_key = hunk_carryover_key_for_review(path, raw_hunk)
+                occurrence_index = carryover_counts.get(hunk_carryover_key, 0)
+                carryover_counts[hunk_carryover_key] = occurrence_index + 1
+                stable_hunk_id = hunk_resource_id_for_review(
+                    capture.snapshot_id,
+                    path,
+                    hunk_carryover_key,
+                    occurrence_index,
+                )
+                hunk = {
+                    **raw_hunk,
+                    "hunk_id": stable_hunk_id,
+                    "hunk_carryover_key": hunk_carryover_key,
+                    "file_id": file_id,
+                    "path": path,
+                }
                 hunks.append(hunk)
                 if risk.band in {"medium", "high"}:
                     signal = self._hunk_signal(file_id=file_id, hunk_id=stable_hunk_id, path=path, risk_band=risk.band)
                     stored_status = self.state_store.get_signal_status(signal.signal_id)
-                    hunk_status = self.state_store.get_hunk_status(stable_hunk_id)
+                    hunk_status = self.state_store.get_hunk_status(hunk_carryover_key)
                     file_status = self.state_store.get_file_status(file_id)
                     if stored_status:
                         signal.status = stored_status
@@ -97,11 +117,16 @@ class PrecommitReviewBuilder:
                     signals.append(signal)
 
         decision = decide_review(signals, snapshot_is_stale=False)
+        review_state = _review_state_summary(signals)
         snapshot = self._base_snapshot(capture)
         snapshot.update(
             {
                 "decision": decision,
-                "summary": {"message": "Pending staged changes require review.", "changed_file_count": len(files)},
+                "summary": {
+                    "message": "Pending staged changes require review.",
+                    "changed_file_count": len(files),
+                    "review_state": review_state,
+                },
                 "files": files,
                 "hunks": hunks,
                 "signals": [signal.model_dump() for signal in signals],
@@ -200,6 +225,17 @@ def _line_counts(diff_text: str) -> tuple[int, int]:
         elif line.startswith("-"):
             deletions += 1
     return additions, deletions
+
+
+def _review_state_summary(signals: list[ReviewSignal]) -> str:
+    if not signals:
+        return "reviewed"
+    open_count = sum(1 for signal in signals if signal.status == "open")
+    if open_count == len(signals):
+        return "unreviewed"
+    if open_count == 0:
+        return "reviewed"
+    return "partially_reviewed"
 
 
 def _target_from_snapshot(snapshot: dict[str, Any]):
