@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 RiskLevel = Literal["high", "medium", "low", "unknown"]
 CoverageStatus = Literal["covered", "partial", "missing", "unknown"]
 ReviewStatus = Literal["unreviewed", "reviewed", "needs_follow_up", "needs_recheck"]
+ReviewSignalStatus = Literal["open", "reviewed", "resolved", "accepted_risk", "false_positive"]
 CaptureLevel = Literal["full", "partial", "diff_only"]
 ConfidenceLevel = Literal["high", "medium", "low"]
 RelationshipType = Literal["primary", "secondary", "inferred"]
@@ -17,7 +18,16 @@ AgentAssessmentStatus = Literal["not_run", "running", "accepted", "failed", "fal
 AssessmentMode = Literal["working_tree", "commit_range", "pull_request"]
 EvidenceGrade = Literal["direct", "indirect", "inferred", "claimed", "not_run", "unknown"]
 ClaimType = Literal["refactor", "bugfix", "feature", "test", "config", "docs", "cleanup", "unknown"]
-ReviewDecision = Literal["safe_to_commit", "needs_recheck", "needs_tests", "do_not_commit_yet", "unknown"]
+ReviewDecision = Literal[
+    "no_known_blockers",
+    "needs_review",
+    "not_recommended",
+    "safe_to_commit",
+    "needs_recheck",
+    "needs_tests",
+    "do_not_commit_yet",
+    "unknown",
+]
 MismatchKind = Literal[
     "claimed_refactor_but_public_surface_changed",
     "claimed_tested_but_no_executed_test_evidence",
@@ -245,6 +255,21 @@ class HunkReviewItem(BaseModel):
     fact_basis: List[str] = Field(default_factory=list)
     provenance_refs: List[ProvenanceRef] = Field(default_factory=list)
     mismatch_ids: List[str] = Field(default_factory=list)
+
+
+class ReviewSignal(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    signal_id: str
+    kind: str
+    target_type: Literal["file", "hunk", "entity", "evidence", "claim", "snapshot"]
+    target_id: str
+    severity: Literal["info", "review", "blocker"]
+    status: ReviewSignalStatus = "open"
+    decision_impact: Literal["none", "prevents_no_known_blockers", "forces_not_recommended"]
+    evidence_ids: List[str] = Field(default_factory=list)
+    policy_rule_id: str
+    message: str
 
 
 class FileAssessment(BaseModel):
