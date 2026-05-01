@@ -109,6 +109,22 @@ def test_precommit_review_queue_reports_stale_after_staged_change(tmp_path):
     assert response.json()["decision"] == "not_recommended"
 
 
+def test_snapshots_current_reports_workspace_changed_outside_staged_target(tmp_path):
+    repo = make_repo(tmp_path)
+    (repo / "backend" / "schema.py").write_text("value = 2\n", encoding="utf-8")
+    run_git(repo, "add", "backend/schema.py")
+    client.post("/api/precommit-review/rebuild", json={"workspace_path": str(repo)})
+
+    (repo / "backend" / "local_debug.py").write_text("debug = True\n", encoding="utf-8")
+    response = client.get(f"/api/snapshots/current?workspace_path={repo}")
+
+    assert response.status_code == 200
+    assert response.json()["review_target"] == "staged_only"
+    assert response.json()["stale"] is False
+    assert response.json()["workspace_changed_outside_target"] is True
+    assert response.json()["decision"] == "needs_review"
+
+
 def test_precommit_verification_run_endpoint_records_failed_command(tmp_path):
     repo = make_repo(tmp_path)
     (repo / "backend" / "schema.py").write_text("value = 2\n", encoding="utf-8")
