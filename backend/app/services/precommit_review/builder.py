@@ -294,7 +294,7 @@ def _verification_signal(run: dict[str, Any]) -> ReviewSignal:
             decision_impact="forces_not_recommended",
             evidence_ids=[run["run_id"]],
             policy_rule_id="failed_tool_launched_verification",
-            message=f"Verification command failed: {run['command']}",
+            message=f"Verification command failed. Evidence: {run['run_id']}",
         )
     if not run["target_aligned"]:
         return ReviewSignal(
@@ -307,7 +307,7 @@ def _verification_signal(run: dict[str, Any]) -> ReviewSignal:
             decision_impact="prevents_no_known_blockers",
             evidence_ids=[run["run_id"]],
             policy_rule_id="target_misaligned_verification",
-            message=f"Verification command was executed but target-misaligned: {run['command']}",
+            message=f"Verification command was executed but target-misaligned. Evidence: {run['run_id']}",
         )
     return ReviewSignal(
         signal_id=f"sig_verification_passed_{run['run_id']}",
@@ -319,5 +319,5 @@ def _verification_signal(run: dict[str, Any]) -> ReviewSignal:
         decision_impact="none",
         evidence_ids=[run["run_id"]],
         policy_rule_id="passed_tool_launched_verification",
-        message=f"Verification command passed: {run['command']}",
+        message=f"Verification command passed. Evidence: {run['run_id']}",
     )
