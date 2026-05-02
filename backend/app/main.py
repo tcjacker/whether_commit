@@ -3,8 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 
 app = FastAPI(
-    title="AI Application Overview API",
-    description="API for the AI Application Overview MVP (Lightweight Edition)",
+    title="whether_commit API",
+    description="API for local pre-commit assessment and commit-readiness review",
     version="1.0.0",
 )
 

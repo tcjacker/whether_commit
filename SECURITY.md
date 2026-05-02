@@ -17,7 +17,7 @@ If this repository does not yet publish a dedicated security contact, open a min
 
 ## Security Model
 
-`backend-visiable` is designed for local development against trusted repositories. It can inspect git metadata, read source files, and aggregate local test or assessment evidence. Do not run it against untrusted repositories without reviewing the code and command paths first.
+`whether_commit` is designed for local pre-commit assessment against trusted repositories. It can inspect git metadata, read source files, and aggregate local test or assessment evidence to help judge whether current changes should be committed. Do not run it against untrusted repositories without reviewing the code and command paths first.
 
 ## Secrets
 

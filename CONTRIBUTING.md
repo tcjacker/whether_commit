@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve `backend-visiable`.
+Thanks for helping improve `whether_commit`.
 
 ## Development Setup
 

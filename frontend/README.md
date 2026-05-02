@@ -1,6 +1,6 @@
-# backend-visiable frontend
+# whether_commit frontend
 
-React + TypeScript + Vite UI for reviewing repository change assessments.
+React + TypeScript + Vite UI for deciding whether current repository changes are ready to commit.
 
 ## Commands
 

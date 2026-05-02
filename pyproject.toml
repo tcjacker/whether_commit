@@ -1,5 +1,5 @@
 [project]
-name = "backend-visiable"
+name = "whether_commit"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
