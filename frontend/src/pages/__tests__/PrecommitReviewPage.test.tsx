@@ -191,7 +191,7 @@ describe('PrecommitReviewPage', () => {
 
   beforeEach(() => {
     window.localStorage.clear()
-    window.localStorage.setItem('precommit-review.language', 'en-US')
+    window.localStorage.setItem('assessment.language', 'en-US')
     api.fetchCurrentSnapshot.mockClear()
     api.rebuildPrecommitReview.mockClear()
     api.updateHunkReviewState.mockClear()
@@ -210,10 +210,10 @@ describe('PrecommitReviewPage', () => {
     expect(await screen.findByLabelText('assessment-summary')).toBeInTheDocument()
     expect(screen.getByText('Agentic Change Assessment')).toBeInTheDocument()
     expect(screen.getByText('本次变更包含提交前审查台更新。')).toBeInTheDocument()
-    expect(screen.getByText('代码变更总览')).toBeInTheDocument()
-    expect(screen.getByText('Codex 聊天和操作记录')).toBeInTheDocument()
-    expect(screen.getByText('测试执行情况')).toBeInTheDocument()
-    expect(screen.getByText('Agent 总体评估')).toBeInTheDocument()
+    expect(screen.getByText('Code Change Overview')).toBeInTheDocument()
+    expect(screen.getByText('Codex Chat and Operation Records')).toBeInTheDocument()
+    expect(screen.getByText('Test Execution')).toBeInTheDocument()
+    expect(screen.getByText('Agent Overall Assessment')).toBeInTheDocument()
     expect(screen.getByLabelText('changed-files')).toBeInTheDocument()
     expect(screen.getByLabelText('file-diff')).toBeInTheDocument()
     expect(screen.getByLabelText('file-evidence')).toBeInTheDocument()
@@ -286,7 +286,7 @@ describe('PrecommitReviewPage', () => {
     expect(screen.getByText('Agent 总体评估')).toBeInTheDocument()
     expect(screen.queryByText(/^ApiError:/)).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '开始重建' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start rebuild' }))
 
     await waitFor(() => expect(assessmentApi.triggerAssessmentRebuild).toHaveBeenCalledWith({
       repo_key: 'divide_prd_to_ui',

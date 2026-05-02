@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { TestChangesPage } from '../TestChangesPage'
 
 vi.mock('../../api/assessments', () => ({
@@ -114,6 +114,10 @@ vi.mock('../../api/assessments', () => ({
 }))
 
 describe('TestChangesPage', () => {
+  beforeEach(() => {
+    window.localStorage.setItem('assessment.language', 'en-US')
+  })
+
   it('renders only changed test files in the test module', async () => {
     render(<TestChangesPage />)
 

@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AssessmentReviewPage } from '../AssessmentReviewPage'
 
 vi.mock('../../api/assessments', () => ({
@@ -203,14 +203,18 @@ vi.mock('../../api/assessments', () => ({
 }))
 
 describe('AssessmentReviewPage', () => {
+  beforeEach(() => {
+    window.localStorage.setItem('assessment.language', 'en-US')
+  })
+
   it('renders summary, file list, diff, and evidence sections', async () => {
     render(<AssessmentReviewPage />)
 
     expect(await screen.findByText('本次变更包含 1 个待审查文件。')).toBeInTheDocument()
-    expect(screen.getByText('代码变更总览')).toBeInTheDocument()
-    expect(screen.getByText('Codex 聊天和操作记录')).toBeInTheDocument()
-    expect(screen.getByText('测试执行情况')).toBeInTheDocument()
-    expect(screen.getByText('Agent 总体评估')).toBeInTheDocument()
+    expect(screen.getByText('Code Change Overview')).toBeInTheDocument()
+    expect(screen.getByText('Codex Chat and Operation Records')).toBeInTheDocument()
+    expect(screen.getByText('Test Execution')).toBeInTheDocument()
+    expect(screen.getByText('Agent Overall Assessment')).toBeInTheDocument()
     expect(screen.getAllByText('backend/app/main.py').length).toBeGreaterThan(0)
     const changedFilesPanel = screen.getByLabelText('changed-files')
     expect(changedFilesPanel.textContent?.indexOf('backend/app/main.py')).toBeLessThan(
@@ -226,8 +230,8 @@ describe('AssessmentReviewPage', () => {
     expect(screen.getAllByText('Provenance').length).toBeGreaterThan(0)
     expect(screen.getByText('working tree')).toBeInTheDocument()
     expect(screen.getByText('needs tests · 1 mismatch · 1 unreviewed')).toBeInTheDocument()
-    expect(screen.getByText(/暂不建议提交：需要补强测试证据后再提交。/)).toBeInTheDocument()
-    expect(screen.getByText(/优先看 backend\/app\/main.py hunk_001 \(P92\)：public API changed/)).toBeInTheDocument()
+    expect(screen.getByText(/Do not commit yet: strengthen test evidence before committing./)).toBeInTheDocument()
+    expect(screen.getByText(/Review backend\/app\/main.py hunk_001 \(P92\) first: public API changed/)).toBeInTheDocument()
     expect(screen.getByText('0 missing, 1 weak evidence, coverage unknown')).toBeInTheDocument()
     expect(screen.getByText('capture partial, provenance partial, confidence medium')).toBeInTheDocument()
     expect(screen.getAllByText('Priority 92').length).toBeGreaterThan(0)

@@ -5,6 +5,7 @@ import { ChangedFileList } from '../components/assessment/ChangedFileList'
 import { FileDiffReview } from '../components/assessment/FileDiffReview'
 import { FileEvidencePanel } from '../components/assessment/FileEvidencePanel'
 import { useAssessmentRebuild } from '../hooks/useAssessmentRebuild'
+import { readStoredLanguage, storeLanguage, t, type Language } from '../i18n'
 import type { AssessmentManifest, ChangedFileDetail, ChangedFileSummary } from '../types/api'
 import { withV02PreviewDetail, withV02PreviewManifest } from '../utils/assessmentPreview'
 import { sortFilesByReviewPriority } from '../utils/assessmentSorting'
@@ -31,6 +32,7 @@ export function TestChangesPage() {
   const [detail, setDetail] = useState<ChangedFileDetail | null>(null)
   const [agentRunningFileId, setAgentRunningFileId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [language, setLanguage] = useState<Language>(() => readStoredLanguage())
 
   const loadAssessment = useCallback(() => fetchLatestAssessment(repoKey, workspacePath)
     .then(data => {
@@ -59,6 +61,11 @@ export function TestChangesPage() {
     setSelectedFileId(file.file_id)
   }
 
+  const handleLanguageChange = (nextLanguage: Language) => {
+    setLanguage(nextLanguage)
+    storeLanguage(nextLanguage)
+  }
+
   const handleRunAgent = () => {
     if (!manifest || !selectedFileId || agentRunningFileId) return
     setAgentRunningFileId(selectedFileId)
@@ -69,12 +76,12 @@ export function TestChangesPage() {
             ...current.file_assessment,
             agent_status: 'running',
             agent_source: 'codex',
-            unknowns: ['Codex agent assessment is running.'],
+            unknowns: [language === 'zh-CN' ? 'Codex agent 分析运行中。' : 'Codex agent assessment is running.'],
           },
         }
       : current)
     Promise.all([
-      triggerFileAgentAssessment(repoKey, manifest.assessment_id, selectedFileId, workspacePath),
+      triggerFileAgentAssessment(repoKey, manifest.assessment_id, selectedFileId, workspacePath, language),
       minimumVisibleDelay(),
     ])
       .then(([updatedDetail]) => setDetail(updatedDetail))
@@ -85,7 +92,7 @@ export function TestChangesPage() {
   const displayError = error ?? rebuildError
 
   if (displayError) return <div className={styles.center}>{displayError}</div>
-  if (!manifest) return <div className={styles.center}>Loading test changes...</div>
+  if (!manifest) return <div className={styles.center}>{t(language, 'loadingAssessment')}</div>
 
   const testFiles = sortFilesByReviewPriority(manifest.file_list.filter(file => isTestFile(file.path)))
 
@@ -97,9 +104,11 @@ export function TestChangesPage() {
         isRebuilding={isRebuilding}
         rebuildJob={job}
         onRebuild={rebuild}
+        language={language}
+        onLanguageChange={handleLanguageChange}
       />
       <div className={styles.workspace}>
-        <ChangedFileList files={testFiles} selectedFileId={selectedFileId} onSelect={handleSelect} title="Test Files" />
+        <ChangedFileList files={testFiles} selectedFileId={selectedFileId} onSelect={handleSelect} title={t(language, 'testFiles')} />
         <FileDiffReview detail={detail} />
         <FileEvidencePanel detail={detail} onRunAgent={handleRunAgent} running={agentRunningFileId === selectedFileId} />
       </div>

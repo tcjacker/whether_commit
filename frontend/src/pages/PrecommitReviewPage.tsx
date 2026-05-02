@@ -3,7 +3,6 @@ import { fetchLatestAssessment } from '../api/assessments'
 import {
   fetchVerificationRun,
   fetchCurrentSnapshot,
-  rebuildPrecommitReview,
   runVerificationCommand,
   updateHunkReviewState,
   updateSignalReviewState,
@@ -12,14 +11,12 @@ import { AssessmentSummaryBar } from '../components/assessment/AssessmentSummary
 import { RebuildButton } from '../components/rebuild/RebuildButton'
 import { RebuildProgress } from '../components/rebuild/RebuildProgress'
 import { useAssessmentRebuild } from '../hooks/useAssessmentRebuild'
+import { readStoredLanguage, storeLanguage, type Language } from '../i18n'
 import type { AssessmentManifest, JobState, PrecommitFile, PrecommitHunk, PrecommitSnapshot, VerificationRun } from '../types/api'
 import { isTestFile } from '../utils/testFiles'
 import styles from './PrecommitReviewPage.module.css'
 
-type Language = 'zh-CN' | 'en-US'
 type ActiveModule = 'review' | 'tests'
-
-const LANGUAGE_STORAGE_KEY = 'precommit-review.language'
 
 const COPY: Record<Language, Record<string, string>> = {
   'en-US': {
@@ -84,11 +81,6 @@ const COPY: Record<Language, Record<string, string>> = {
     verification: '验证',
     workspaceChangedOutsideTarget: '工作区存在目标外变更',
   },
-}
-
-function readStoredLanguage(): Language {
-  const value = window.localStorage.getItem(LANGUAGE_STORAGE_KEY)
-  return value === 'en-US' || value === 'zh-CN' ? value : 'zh-CN'
 }
 
 function t(language: Language, key: string) {
@@ -213,12 +205,6 @@ export function PrecommitReviewPage() {
     setSelectedFileId(current => nextFiles.some(file => file.file_id === current) ? current : nextFiles[0]?.file_id ?? null)
   }, [snapshot, activeModule])
 
-  const handleRebuild = () => {
-    rebuildPrecommitReview(workspacePath)
-      .then(setSnapshotAndSelection)
-      .catch(err => setError(String(err)))
-  }
-
   const handleHunkReviewed = (hunk: PrecommitHunk) => {
     updateHunkReviewState(workspacePath, hunk.hunk_id, 'reviewed')
       .then(setSnapshotAndSelection)
@@ -250,7 +236,7 @@ export function PrecommitReviewPage() {
 
   const handleLanguageChange = (nextLanguage: Language) => {
     setLanguage(nextLanguage)
-    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, nextLanguage)
+    storeLanguage(nextLanguage)
   }
 
   if (error) return <div className={styles.center}>{error}</div>
@@ -266,6 +252,8 @@ export function PrecommitReviewPage() {
             isRebuilding={isAssessmentRebuilding}
             rebuildJob={assessmentJob}
             onRebuild={rebuildAssessment}
+            language={language}
+            onLanguageChange={handleLanguageChange}
           />
         )
         : (
@@ -274,6 +262,7 @@ export function PrecommitReviewPage() {
             isRebuilding={isAssessmentRebuilding}
             job={assessmentJob}
             language={language}
+            onLanguageChange={handleLanguageChange}
             onRebuild={rebuildAssessment}
           />
         )}
@@ -304,21 +293,6 @@ export function PrecommitReviewPage() {
           <div className={`${styles.decision} ${decisionClass(snapshot.decision)}`}>
             {translatedDecision(snapshot.decision, language)}
           </div>
-          <div className={styles.languageToggle} aria-label={t(language, 'language')}>
-            <button
-              className={language === 'zh-CN' ? styles.activeLanguage : undefined}
-              onClick={() => handleLanguageChange('zh-CN')}
-            >
-              {t(language, 'simplifiedChinese')}
-            </button>
-            <button
-              className={language === 'en-US' ? styles.activeLanguage : undefined}
-              onClick={() => handleLanguageChange('en-US')}
-            >
-              {t(language, 'english')}
-            </button>
-          </div>
-          <button className={styles.button} onClick={handleRebuild}>{t(language, 'rebuild')}</button>
         </div>
       </header>
 
@@ -354,12 +328,14 @@ function AgenticAssessmentFallback({
   isRebuilding,
   job,
   language,
+  onLanguageChange,
   onRebuild,
 }: {
   error: string | null
   isRebuilding: boolean
   job: JobState | null
   language: Language
+  onLanguageChange: (language: Language) => void
   onRebuild: () => void
 }) {
   return (
@@ -387,8 +363,22 @@ function AgenticAssessmentFallback({
         </div>
       </div>
       <div className={styles.agentAssessmentActions}>
-        <RebuildButton isRebuilding={isRebuilding} onClick={onRebuild} />
-        <RebuildProgress job={job} />
+        <div className={styles.languageToggle} aria-label={t(language, 'language')}>
+          <button
+            className={language === 'zh-CN' ? styles.activeLanguage : undefined}
+            onClick={() => onLanguageChange('zh-CN')}
+          >
+            {t(language, 'simplifiedChinese')}
+          </button>
+          <button
+            className={language === 'en-US' ? styles.activeLanguage : undefined}
+            onClick={() => onLanguageChange('en-US')}
+          >
+            {t(language, 'english')}
+          </button>
+        </div>
+        <RebuildButton isRebuilding={isRebuilding} onClick={onRebuild} language={language} />
+        <RebuildProgress job={job} language={language} />
       </div>
     </section>
   )
