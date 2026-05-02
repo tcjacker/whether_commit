@@ -31,6 +31,19 @@ from app.services.test_management.command_runner import (
 router = APIRouter()
 
 
+def _empty_test_management_summary(repo_key: str, assessment_id: str) -> TestManagementSummary:
+    return TestManagementSummary(
+        assessment_id=assessment_id,
+        repo_key=repo_key,
+        changed_test_file_count=0,
+        test_case_count=0,
+        evidence_grade_counts={},
+        command_status_counts={},
+        files=[],
+        unknowns=[],
+    )
+
+
 @router.post("/rebuild", response_model=RebuildResponse)
 async def trigger_assessment_rebuild(request: RebuildRequest):
     try:
@@ -88,7 +101,10 @@ async def get_assessment_tests(repo_key: str, assessment_id: str, workspace_path
     snapshot_id = assessment_id.removeprefix("aca_")
     summary = snapshot_store.get_test_management_summary(repo_key, snapshot_id, workspace_path=workspace_path)
     if not summary:
-        raise HTTPException(status_code=404, detail="TEST_MANAGEMENT_NOT_READY")
+        manifest = snapshot_store.get_assessment_manifest(repo_key, snapshot_id, workspace_path=workspace_path)
+        if not manifest:
+            raise HTTPException(status_code=404, detail="ASSESSMENT_NOT_READY: Please trigger a rebuild first.")
+        return _empty_test_management_summary(repo_key, assessment_id)
     return TestManagementSummary.model_validate(summary)
 
 

@@ -121,6 +121,43 @@ def test_get_assessment_tests_returns_summary(monkeypatch):
     assert response.json()["files"][0]["path"] == "backend/tests/test_builder.py"
 
 
+def test_get_assessment_tests_returns_empty_summary_when_management_data_is_absent(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_store,
+        "get_test_management_summary",
+        lambda repo_key, snapshot_id, workspace_path=None: None,
+    )
+    monkeypatch.setattr(
+        snapshot_store,
+        "get_assessment_manifest",
+        lambda repo_key, snapshot_id, workspace_path=None: {
+            "assessment_id": f"aca_{snapshot_id}",
+            "workspace_snapshot_id": snapshot_id,
+            "repo_key": repo_key,
+            "status": "ready",
+            "summary": {},
+            "file_list": [],
+            "risk_signals_summary": [],
+            "agent_sources": ["git_diff"],
+            "review_progress": {},
+        },
+    )
+
+    response = client.get("/api/assessments/aca_ws_1/tests?repo_key=demo")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "assessment_id": "aca_ws_1",
+        "repo_key": "demo",
+        "changed_test_file_count": 0,
+        "test_case_count": 0,
+        "evidence_grade_counts": {},
+        "command_status_counts": {},
+        "files": [],
+        "unknowns": [],
+    }
+
+
 def test_get_assessment_test_case_returns_detail(monkeypatch):
     monkeypatch.setattr(
         snapshot_store,
