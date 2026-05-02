@@ -9,8 +9,10 @@ import {
   updateSignalReviewState,
 } from '../api/precommitReview'
 import { AssessmentSummaryBar } from '../components/assessment/AssessmentSummaryBar'
+import { RebuildButton } from '../components/rebuild/RebuildButton'
+import { RebuildProgress } from '../components/rebuild/RebuildProgress'
 import { useAssessmentRebuild } from '../hooks/useAssessmentRebuild'
-import type { AssessmentManifest, PrecommitFile, PrecommitHunk, PrecommitSnapshot, VerificationRun } from '../types/api'
+import type { AssessmentManifest, JobState, PrecommitFile, PrecommitHunk, PrecommitSnapshot, VerificationRun } from '../types/api'
 import { isTestFile } from '../utils/testFiles'
 import styles from './PrecommitReviewPage.module.css'
 
@@ -123,6 +125,22 @@ function linePrefix(type: string) {
   if (type === 'add') return '+'
   if (type === 'remove') return '-'
   return ' '
+}
+
+function assessmentFallbackMessage(error: string | null, language: Language) {
+  if (!error) {
+    return language === 'zh-CN'
+      ? '正在加载提交分析。'
+      : 'Loading commit assessment.'
+  }
+  if (error.includes('ASSESSMENT_NOT_READY')) {
+    return language === 'zh-CN'
+      ? '提交分析还未生成。请先触发重建。'
+      : 'Commit assessment is not ready. Please trigger a rebuild first.'
+  }
+  return language === 'zh-CN'
+    ? '提交分析暂不可用。可以先触发重建。'
+    : 'Commit assessment is unavailable. You can trigger a rebuild.'
 }
 
 export function PrecommitReviewPage() {
@@ -251,9 +269,13 @@ export function PrecommitReviewPage() {
           />
         )
         : (
-          <section className={styles.assessmentFallback} aria-label="assessment-summary">
-            {assessmentError ?? assessmentRebuildError ?? 'Loading Agentic Change Assessment...'}
-          </section>
+          <AgenticAssessmentFallback
+            error={assessmentError ?? assessmentRebuildError}
+            isRebuilding={isAssessmentRebuilding}
+            job={assessmentJob}
+            language={language}
+            onRebuild={rebuildAssessment}
+          />
         )}
       <header className={styles.summaryBar}>
         <div>
@@ -324,6 +346,51 @@ export function PrecommitReviewPage() {
         />
       </main>
     </div>
+  )
+}
+
+function AgenticAssessmentFallback({
+  error,
+  isRebuilding,
+  job,
+  language,
+  onRebuild,
+}: {
+  error: string | null
+  isRebuilding: boolean
+  job: JobState | null
+  language: Language
+  onRebuild: () => void
+}) {
+  return (
+    <section className={styles.agentAssessmentShell} aria-label="assessment-summary">
+      <div className={styles.agentAssessmentPrimary}>
+        <h1>Agentic Change Assessment</h1>
+        <p>{assessmentFallbackMessage(error, language)}</p>
+        <div className={styles.agentAssessmentGrid}>
+          <article>
+            <h2>代码变更总览</h2>
+            <p>{language === 'zh-CN' ? '等待重建后生成变更摘要。' : 'Waiting for rebuild to generate the change overview.'}</p>
+          </article>
+          <article>
+            <h2>Codex 聊天和操作记录</h2>
+            <p>{language === 'zh-CN' ? '等待采集本轮 agent 记录。' : 'Waiting to capture this round of agent records.'}</p>
+          </article>
+          <article>
+            <h2>测试执行情况</h2>
+            <p>{language === 'zh-CN' ? '等待汇总测试与验证证据。' : 'Waiting to summarize test and verification evidence.'}</p>
+          </article>
+          <article>
+            <h2>Agent 总体评估</h2>
+            <p>{language === 'zh-CN' ? '重建完成后给出提交建议。' : 'Commit guidance appears after rebuild completes.'}</p>
+          </article>
+        </div>
+      </div>
+      <div className={styles.agentAssessmentActions}>
+        <RebuildButton isRebuilding={isRebuilding} onClick={onRebuild} />
+        <RebuildProgress job={job} />
+      </div>
+    </section>
   )
 }
 

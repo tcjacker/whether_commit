@@ -115,8 +115,7 @@ const api = vi.hoisted(() => ({
 
 vi.mock('../../api/precommitReview', () => api)
 
-vi.mock('../../api/assessments', () => ({
-  fetchLatestAssessment: vi.fn(async () => ({
+const assessmentManifest = {
     assessment_id: 'aca_ws_1',
     workspace_snapshot_id: 'ws_1',
     repo_key: 'demo',
@@ -165,9 +164,14 @@ vi.mock('../../api/assessments', () => ({
     risk_signals_summary: [],
     agent_sources: ['git_diff'],
     review_progress: { total: 2, reviewed: 1, needs_follow_up: 0, needs_recheck: 0, unreviewed: 1 },
-  })),
-  triggerAssessmentRebuild: vi.fn(async () => ({ job_id: 'job_1', status: 'pending' })),
+}
+
+const assessmentApi = vi.hoisted(() => ({
+  fetchLatestAssessment: vi.fn(),
+  triggerAssessmentRebuild: vi.fn(),
 }))
+
+vi.mock('../../api/assessments', () => assessmentApi)
 
 vi.mock('../../api/jobs', () => ({
   fetchJob: vi.fn(async () => ({
@@ -193,6 +197,10 @@ describe('PrecommitReviewPage', () => {
     api.updateHunkReviewState.mockClear()
     api.fetchVerificationRun.mockClear()
     api.runVerificationCommand.mockClear()
+    assessmentApi.fetchLatestAssessment.mockReset()
+    assessmentApi.triggerAssessmentRebuild.mockReset()
+    assessmentApi.fetchLatestAssessment.mockResolvedValue(assessmentManifest)
+    assessmentApi.triggerAssessmentRebuild.mockResolvedValue({ job_id: 'job_1', status: 'pending' })
   })
 
   it('renders review console state and handles hunk review and verification run', async () => {
@@ -260,5 +268,29 @@ describe('PrecommitReviewPage', () => {
     expect(screen.getByText('测试文件')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '审查' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '测试' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('keeps a rebuildable agent assessment shell when the latest assessment is not ready', async () => {
+    assessmentApi.fetchLatestAssessment.mockRejectedValueOnce(
+      new Error('ApiError: ASSESSMENT_NOT_READY: Please trigger a rebuild first.'),
+    )
+
+    render(<PrecommitReviewPage />)
+
+    expect(await screen.findByLabelText('assessment-summary')).toBeInTheDocument()
+    expect(screen.getByText('Agentic Change Assessment')).toBeInTheDocument()
+    expect(screen.getByText('Commit assessment is not ready. Please trigger a rebuild first.')).toBeInTheDocument()
+    expect(screen.getByText('代码变更总览')).toBeInTheDocument()
+    expect(screen.getByText('Codex 聊天和操作记录')).toBeInTheDocument()
+    expect(screen.getByText('测试执行情况')).toBeInTheDocument()
+    expect(screen.getByText('Agent 总体评估')).toBeInTheDocument()
+    expect(screen.queryByText(/^ApiError:/)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '开始重建' }))
+
+    await waitFor(() => expect(assessmentApi.triggerAssessmentRebuild).toHaveBeenCalledWith({
+      repo_key: 'divide_prd_to_ui',
+      workspace_path: undefined,
+    }))
   })
 })
