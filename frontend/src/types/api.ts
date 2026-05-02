@@ -233,6 +233,7 @@ export interface PrecommitFile {
   path: string
   additions: number
   deletions: number
+  review_state_summary: 'reviewed' | 'unreviewed' | 'partially_reviewed'
   risk: {
     score: number
     band: 'low' | 'medium' | 'high'
@@ -250,6 +251,7 @@ export interface PrecommitHunk {
   new_start: number
   new_lines: number
   hunk_fingerprint: string
+  review_status: PrecommitReviewState
   lines: DiffLine[]
 }
 

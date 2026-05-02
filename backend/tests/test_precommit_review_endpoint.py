@@ -60,6 +60,8 @@ def test_precommit_review_signal_state_update_changes_decision(tmp_path):
 
     assert response.status_code == 200
     assert response.json()["decision"] == "no_known_blockers"
+    assert response.json()["hunks"][0]["review_status"] == "reviewed"
+    assert response.json()["files"][0]["review_state_summary"] == "reviewed"
 
 
 def test_precommit_review_hunk_state_update_changes_decision(tmp_path):

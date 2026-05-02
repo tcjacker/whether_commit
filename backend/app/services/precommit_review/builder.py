@@ -84,7 +84,7 @@ class PrecommitReviewBuilder:
                 "deletions": deletions,
                 "risk": {"score": risk.score, "band": risk.band, "reasons": [reason.__dict__ for reason in risk.reasons]},
             }
-            files.append(file_record)
+            file_hunk_statuses: list[str] = []
             carryover_counts: dict[str, int] = {}
             for raw_hunk in file_hunks:
                 hunk_carryover_key = hunk_carryover_key_for_review(path, raw_hunk)
@@ -96,26 +96,33 @@ class PrecommitReviewBuilder:
                     hunk_carryover_key,
                     occurrence_index,
                 )
+                hunk_status = self.state_store.get_hunk_status(hunk_carryover_key)
+                file_status = self.state_store.get_file_status(file_id)
+                effective_status = hunk_status or file_status or "open"
                 hunk = {
                     **raw_hunk,
                     "hunk_id": stable_hunk_id,
                     "hunk_carryover_key": hunk_carryover_key,
                     "file_id": file_id,
                     "path": path,
+                    "review_status": effective_status,
                 }
                 hunks.append(hunk)
+                file_hunk_statuses.append(effective_status)
                 if risk.band in {"medium", "high"}:
                     signal = self._hunk_signal(file_id=file_id, hunk_id=stable_hunk_id, path=path, risk_band=risk.band)
                     stored_status = self.state_store.get_signal_status(signal.signal_id)
-                    hunk_status = self.state_store.get_hunk_status(hunk_carryover_key)
-                    file_status = self.state_store.get_file_status(file_id)
                     if stored_status:
                         signal.status = stored_status
                     elif hunk_status:
                         signal.status = hunk_status
                     elif file_status:
                         signal.status = file_status
+                    hunk["review_status"] = signal.status
+                    file_hunk_statuses[-1] = signal.status
                     signals.append(signal)
+            file_record["review_state_summary"] = _review_state_summary_from_statuses(file_hunk_statuses)
+            files.append(file_record)
 
         decision = decide_review(signals, snapshot_is_stale=False)
         review_state = _review_state_summary(signals)
@@ -244,6 +251,17 @@ def _review_state_summary(signals: list[ReviewSignal]) -> str:
         return "reviewed"
     open_count = sum(1 for signal in signals if signal.status == "open")
     if open_count == len(signals):
+        return "unreviewed"
+    if open_count == 0:
+        return "reviewed"
+    return "partially_reviewed"
+
+
+def _review_state_summary_from_statuses(statuses: list[str]) -> str:
+    if not statuses:
+        return "reviewed"
+    open_count = sum(1 for status in statuses if status == "open")
+    if open_count == len(statuses):
         return "unreviewed"
     if open_count == 0:
         return "reviewed"

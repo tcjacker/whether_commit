@@ -146,7 +146,14 @@ def test_rebuild_preserves_review_state_only_for_unchanged_hunk(tmp_path):
         for signal in rebuilt["signals"]
         if signal["target_id"] == hunk["hunk_id"]
     }
+    hunk_statuses_by_line = {
+        next(line["content"] for line in hunk["lines"] if line["type"] == "add"): hunk["review_status"]
+        for hunk in rebuilt["hunks"]
+    }
 
     assert statuses_by_line["beta = 2"] == "reviewed"
     assert statuses_by_line["alpha = 3"] == "open"
+    assert hunk_statuses_by_line["beta = 2"] == "reviewed"
+    assert hunk_statuses_by_line["alpha = 3"] == "open"
     assert rebuilt["summary"]["review_state"] == "partially_reviewed"
+    assert rebuilt["files"][0]["review_state_summary"] == "partially_reviewed"
