@@ -115,6 +115,73 @@ const api = vi.hoisted(() => ({
 
 vi.mock('../../api/precommitReview', () => api)
 
+vi.mock('../../api/assessments', () => ({
+  fetchLatestAssessment: vi.fn(async () => ({
+    assessment_id: 'aca_ws_1',
+    workspace_snapshot_id: 'ws_1',
+    repo_key: 'demo',
+    status: 'ready',
+    mode: 'working_tree',
+    provenance_capture_level: 'partial',
+    mismatch_count: 1,
+    weak_test_evidence_count: 1,
+    review_decision: 'needs_tests',
+    hunk_queue_preview: [{
+      hunk_id: 'hunk_001',
+      file_id: 'cf_abc123',
+      path: 'backend/schema.py',
+      priority: 92,
+      risk_level: 'high',
+      reasons: ['public API changed'],
+      fact_basis: ['git_diff'],
+      provenance_refs: [],
+      mismatch_ids: ['mm_001'],
+    }],
+    agentic_summary: {
+      generated_by: 'codex_logs',
+      capture_level: 'partial',
+      confidence: 'medium',
+      time_window: { since_commit: 'HEAD', since_commit_time: null },
+      user_design_goal: '用户希望保留提交分析。',
+      codex_change_summary: 'Codex 建立 precommit review console。',
+      main_objective: '保留顶部 Agentic Change Assessment，同时提供本地提交前审查。',
+      key_decisions: [],
+      files_or_areas_changed: [],
+      tests_and_verification: ['pytest backend/tests'],
+      unknowns: [],
+    },
+    summary: {
+      headline: '本次变更包含提交前审查台更新。',
+      overall_risk_level: 'medium',
+      coverage_status: 'unknown',
+      changed_file_count: 2,
+      unreviewed_file_count: 1,
+      affected_capability_count: 0,
+      missing_test_count: 0,
+      agent_sources: ['git_diff'],
+      recommended_review_order: ['backend/schema.py'],
+    },
+    file_list: [],
+    risk_signals_summary: [],
+    agent_sources: ['git_diff'],
+    review_progress: { total: 2, reviewed: 1, needs_follow_up: 0, needs_recheck: 0, unreviewed: 1 },
+  })),
+  triggerAssessmentRebuild: vi.fn(async () => ({ job_id: 'job_1', status: 'pending' })),
+}))
+
+vi.mock('../../api/jobs', () => ({
+  fetchJob: vi.fn(async () => ({
+    job_id: 'job_1',
+    repo_key: 'demo',
+    status: 'success',
+    step: 'done',
+    progress: 100,
+    message: 'done',
+    created_at: '2026-05-02T00:00:00Z',
+    updated_at: '2026-05-02T00:00:01Z',
+  })),
+}))
+
 describe('PrecommitReviewPage', () => {
   afterEach(() => cleanup())
 
@@ -132,6 +199,13 @@ describe('PrecommitReviewPage', () => {
     render(<PrecommitReviewPage />)
 
     await waitFor(() => expect(screen.getAllByText('needs review').length).toBeGreaterThan(0))
+    expect(await screen.findByLabelText('assessment-summary')).toBeInTheDocument()
+    expect(screen.getByText('Agentic Change Assessment')).toBeInTheDocument()
+    expect(screen.getByText('本次变更包含提交前审查台更新。')).toBeInTheDocument()
+    expect(screen.getByText('代码变更总览')).toBeInTheDocument()
+    expect(screen.getByText('Codex 聊天和操作记录')).toBeInTheDocument()
+    expect(screen.getByText('测试执行情况')).toBeInTheDocument()
+    expect(screen.getByText('Agent 总体评估')).toBeInTheDocument()
     expect(screen.getByLabelText('changed-files')).toBeInTheDocument()
     expect(screen.getByLabelText('file-diff')).toBeInTheDocument()
     expect(screen.getByLabelText('file-evidence')).toBeInTheDocument()
@@ -172,8 +246,9 @@ describe('PrecommitReviewPage', () => {
   it('preserves test management and language switching in the precommit console', async () => {
     render(<PrecommitReviewPage />)
 
-    expect(await screen.findByText('Review')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Tests' }))
+    const precommitModules = await screen.findByLabelText('precommit modules')
+    expect(within(precommitModules).getByRole('button', { name: 'Review' })).toBeInTheDocument()
+    fireEvent.click(within(precommitModules).getByRole('button', { name: 'Tests' }))
 
     expect(screen.getByText('Test Files')).toBeInTheDocument()
     expect(within(screen.getByLabelText('changed-files')).getByText('backend/tests/test_schema.py')).toBeInTheDocument()

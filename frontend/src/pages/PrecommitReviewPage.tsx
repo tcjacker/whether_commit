@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { fetchLatestAssessment } from '../api/assessments'
 import {
   fetchVerificationRun,
   fetchCurrentSnapshot,
@@ -7,7 +8,9 @@ import {
   updateHunkReviewState,
   updateSignalReviewState,
 } from '../api/precommitReview'
-import type { PrecommitFile, PrecommitHunk, PrecommitSnapshot, VerificationRun } from '../types/api'
+import { AssessmentSummaryBar } from '../components/assessment/AssessmentSummaryBar'
+import { useAssessmentRebuild } from '../hooks/useAssessmentRebuild'
+import type { AssessmentManifest, PrecommitFile, PrecommitHunk, PrecommitSnapshot, VerificationRun } from '../types/api'
 import { isTestFile } from '../utils/testFiles'
 import styles from './PrecommitReviewPage.module.css'
 
@@ -94,6 +97,10 @@ function getWorkspacePath() {
   return new URLSearchParams(window.location.search).get('workspace_path') ?? ''
 }
 
+function getRepoKey() {
+  return new URLSearchParams(window.location.search).get('repo_key') ?? 'divide_prd_to_ui'
+}
+
 function decisionClass(decision: string) {
   if (decision === 'no_known_blockers') return styles.good
   if (decision === 'not_recommended') return styles.bad
@@ -120,6 +127,8 @@ function linePrefix(type: string) {
 
 export function PrecommitReviewPage() {
   const workspacePath = getWorkspacePath()
+  const repoKey = getRepoKey()
+  const [assessment, setAssessment] = useState<AssessmentManifest | null>(null)
   const [snapshot, setSnapshot] = useState<PrecommitSnapshot | null>(null)
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null)
   const [activeModule, setActiveModule] = useState<ActiveModule>('review')
@@ -128,6 +137,21 @@ export function PrecommitReviewPage() {
   const [verificationRun, setVerificationRun] = useState<VerificationRun | null>(null)
   const [evidenceRun, setEvidenceRun] = useState<VerificationRun | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [assessmentError, setAssessmentError] = useState<string | null>(null)
+
+  const loadAssessment = useCallback(() => fetchLatestAssessment(repoKey, workspacePath)
+    .then(data => {
+      setAssessment(data)
+      setAssessmentError(null)
+      return data
+    }), [repoKey, workspacePath])
+
+  const {
+    rebuild: rebuildAssessment,
+    isRebuilding: isAssessmentRebuilding,
+    job: assessmentJob,
+    rebuildError: assessmentRebuildError,
+  } = useAssessmentRebuild(repoKey, workspacePath, loadAssessment)
 
   useEffect(() => {
     fetchCurrentSnapshot(workspacePath)
@@ -137,6 +161,11 @@ export function PrecommitReviewPage() {
       })
       .catch(err => setError(String(err)))
   }, [workspacePath])
+
+  useEffect(() => {
+    loadAssessment()
+      .catch(err => setAssessmentError(String(err)))
+  }, [loadAssessment])
 
   const selectedFile = useMemo(
     () => snapshot?.files.find(file => file.file_id === selectedFileId) ?? null,
@@ -211,6 +240,21 @@ export function PrecommitReviewPage() {
 
   return (
     <div className={styles.page}>
+      {assessment
+        ? (
+          <AssessmentSummaryBar
+            manifest={assessment}
+            activeModule={activeModule}
+            isRebuilding={isAssessmentRebuilding}
+            rebuildJob={assessmentJob}
+            onRebuild={rebuildAssessment}
+          />
+        )
+        : (
+          <section className={styles.assessmentFallback} aria-label="assessment-summary">
+            {assessmentError ?? assessmentRebuildError ?? 'Loading Agentic Change Assessment...'}
+          </section>
+        )}
       <header className={styles.summaryBar}>
         <div>
           <div className={styles.title}>Pre-commit Review</div>

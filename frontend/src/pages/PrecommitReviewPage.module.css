@@ -18,6 +18,14 @@
   min-height: 64px;
 }
 
+.assessmentFallback {
+  flex: 0 0 auto;
+  border-bottom: 1px solid #d9dee7;
+  padding: 14px 0;
+  color: #667085;
+  font-size: 13px;
+}
+
 .title {
   font-size: 16px;
   font-weight: 700;
