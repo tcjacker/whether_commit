@@ -11,6 +11,7 @@ function inferRepoKey(path: string) {
 }
 
 function targetPath() {
+  if (window.location.pathname.startsWith('/precommit')) return '/precommit'
   return window.location.pathname.startsWith('/tests') ? '/tests' : '/'
 }
 

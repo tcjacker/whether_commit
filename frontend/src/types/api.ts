@@ -387,6 +387,94 @@ export interface RebuildRequest {
   workspace_path?: string
 }
 
+export type PrecommitDecision = 'no_known_blockers' | 'needs_review' | 'not_recommended'
+export type PrecommitReviewState = 'open' | 'reviewed' | 'resolved' | 'accepted_risk' | 'false_positive'
+
+export interface PrecommitRiskReason {
+  reason_id: string
+  label: string
+  weight: number
+  evidence_ids?: string[]
+}
+
+export interface PrecommitFile {
+  file_id: string
+  path: string
+  additions: number
+  deletions: number
+  review_state_summary: 'reviewed' | 'unreviewed' | 'partially_reviewed'
+  risk: {
+    score: number
+    band: 'low' | 'medium' | 'high'
+    reasons: PrecommitRiskReason[]
+  }
+}
+
+export interface PrecommitHunk {
+  hunk_id: string
+  hunk_carryover_key: string
+  file_id: string
+  path: string
+  old_start: number
+  old_lines: number
+  new_start: number
+  new_lines: number
+  hunk_fingerprint: string
+  review_status: PrecommitReviewState
+  lines: DiffLine[]
+}
+
+export interface PrecommitSignal {
+  signal_id: string
+  kind: string
+  target_type: 'file' | 'hunk' | 'entity' | 'evidence' | 'claim' | 'snapshot'
+  target_id: string
+  severity: 'info' | 'review' | 'blocker'
+  status: PrecommitReviewState
+  decision_impact: 'none' | 'prevents_no_known_blockers' | 'forces_not_recommended'
+  evidence_ids: string[]
+  policy_rule_id: string
+  message: string
+}
+
+export interface PrecommitQueueItem {
+  queue_id: string
+  item_type: string
+  target_id: string
+  status: string
+  message: string
+  priority: number
+}
+
+export interface PrecommitSnapshot {
+  snapshot_id: string
+  review_target: 'staged_only'
+  decision: PrecommitDecision
+  stale: boolean
+  workspace_changed_outside_target: boolean
+  summary: {
+    message: string
+    changed_file_count: number
+    review_state?: string
+  }
+  files: PrecommitFile[]
+  hunks: PrecommitHunk[]
+  signals: PrecommitSignal[]
+  queue: PrecommitQueueItem[]
+}
+
+export interface VerificationRun {
+  run_id: string
+  snapshot_id?: string
+  command?: string
+  exit_code: number | null
+  status: 'queued' | 'running' | 'passed' | 'failed' | 'error'
+  execution_mode?: 'working_tree'
+  target_aligned: boolean
+  display_status?: string
+  raw_output_ref?: string | null
+}
+
 export interface RebuildResponse {
   job_id: string
   status: string

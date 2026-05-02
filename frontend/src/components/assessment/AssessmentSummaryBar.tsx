@@ -1,9 +1,8 @@
-import type { AssessmentManifest } from '../../types/api'
+import type { AssessmentManifest, JobState } from '../../types/api'
 import { formatMismatchCount, formatValue, t, type Language } from '../../i18n'
 import { RebuildButton } from '../rebuild/RebuildButton'
 import { RebuildProgress } from '../rebuild/RebuildProgress'
 import styles from './AssessmentSummaryBar.module.css'
-import type { JobState } from '../../types/api'
 
 function decisionAdvice(decision: string, language: Language) {
   if (language === 'en-US') {

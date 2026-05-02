@@ -621,16 +621,16 @@ MVP-0 API endpoints:
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/api/rebuild` | Capture selected target and build assessment snapshot. |
-| `GET` | `/api/snapshots/current` | Return latest snapshot metadata and stale state for a review target. |
-| `GET` | `/api/review/queue` | Return prioritized review queue items. |
-| `GET` | `/api/review/files` | Return changed files with risk and review state. |
-| `GET` | `/api/review/files/{file_id}` | Return file detail, hunks, evidence, and signals. |
-| `POST` | `/api/review/files/{file_id}/state` | Update file review state. |
-| `POST` | `/api/review/hunks/{hunk_id}/state` | Update hunk review state. |
-| `POST` | `/api/review/signals/{signal_id}/state` | Update signal review state. |
-| `POST` | `/api/verification/run` | Start a tool-launched verification command. |
-| `GET` | `/api/verification/runs/{run_id}` | Poll verification command status and evidence. |
+| `POST` | `/api/precommit-review/rebuild` | Capture selected target and build assessment snapshot. |
+| `GET` | `/api/precommit-review/snapshots/current` | Return latest snapshot metadata and stale state for a review target. Returns `PRECOMMIT_REVIEW_NOT_READY` instead of rebuilding when no snapshot exists. |
+| `GET` | `/api/precommit-review/queue` | Return prioritized review queue items. |
+| `GET` | `/api/precommit-review/files` | Return changed files with risk and review state. |
+| `GET` | `/api/precommit-review/files/{file_id}` | Return file detail, hunks, evidence, and signals. |
+| `POST` | `/api/precommit-review/files/{file_id}/state` | Update file review state. |
+| `POST` | `/api/precommit-review/hunks/{hunk_id}/state` | Update hunk review state. |
+| `POST` | `/api/precommit-review/signals/{signal_id}/state` | Update signal review state. |
+| `POST` | `/api/precommit-review/verification/run` | Start a tool-launched verification command. |
+| `GET` | `/api/precommit-review/verification/runs/{run_id}` | Poll verification command status and evidence. |
 
 MVP-2 agent context endpoints:
 
