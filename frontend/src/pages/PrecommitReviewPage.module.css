@@ -34,6 +34,35 @@
   gap: 12px;
 }
 
+.nav {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.nav button,
+.languageToggle button {
+  border: 1px solid #cfd6e3;
+  background: #fff;
+  color: #344054;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 5px 9px;
+}
+
+.nav .activeNav,
+.languageToggle .activeLanguage {
+  border-color: #2f80ed;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.languageToggle {
+  display: flex;
+  gap: 4px;
+}
+
 .button {
   border: 1px solid #cfd6e3;
   background: #f8fafc;

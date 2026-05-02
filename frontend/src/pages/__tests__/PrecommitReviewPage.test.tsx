@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PrecommitReviewPage } from '../PrecommitReviewPage'
 
 const snapshot = {
@@ -16,6 +16,13 @@ const snapshot = {
     deletions: 1,
     review_state_summary: 'unreviewed',
     risk: { score: 50, band: 'high', reasons: [{ reason_id: 'schema', label: 'Schema changed', weight: 30 }] },
+  }, {
+    file_id: 'file_test',
+    path: 'backend/tests/test_schema.py',
+    additions: 2,
+    deletions: 0,
+    review_state_summary: 'reviewed',
+    risk: { score: 5, band: 'low', reasons: [] },
   }],
   hunks: [{
     hunk_id: 'hunk_1',
@@ -32,6 +39,22 @@ const snapshot = {
       { type: 'header', content: '@@ -1 +1 @@' },
       { type: 'remove', content: 'value = 1' },
       { type: 'add', content: 'value = 2' },
+    ],
+  }, {
+    hunk_id: 'hunk_test',
+    hunk_carryover_key: 'hunk_key_test',
+    file_id: 'file_test',
+    path: 'backend/tests/test_schema.py',
+    old_start: 1,
+    old_lines: 0,
+    new_start: 1,
+    new_lines: 2,
+    hunk_fingerprint: 'sha256:test-hunk',
+    review_status: 'reviewed',
+    lines: [
+      { type: 'header', content: '@@ -0,0 +1,2 @@' },
+      { type: 'add', content: 'def test_value():' },
+      { type: 'add', content: '    assert True' },
     ],
   }],
   signals: [{
@@ -93,6 +116,18 @@ const api = vi.hoisted(() => ({
 vi.mock('../../api/precommitReview', () => api)
 
 describe('PrecommitReviewPage', () => {
+  afterEach(() => cleanup())
+
+  beforeEach(() => {
+    window.localStorage.clear()
+    window.localStorage.setItem('precommit-review.language', 'en-US')
+    api.fetchCurrentSnapshot.mockClear()
+    api.rebuildPrecommitReview.mockClear()
+    api.updateHunkReviewState.mockClear()
+    api.fetchVerificationRun.mockClear()
+    api.runVerificationCommand.mockClear()
+  })
+
   it('renders review console state and handles hunk review and verification run', async () => {
     render(<PrecommitReviewPage />)
 
@@ -101,6 +136,8 @@ describe('PrecommitReviewPage', () => {
     expect(screen.getByLabelText('file-diff')).toBeInTheDocument()
     expect(screen.getByLabelText('file-evidence')).toBeInTheDocument()
     expect(screen.getByText('Staged Files')).toBeInTheDocument()
+    expect(within(screen.getByLabelText('changed-files')).getByText('backend/schema.py')).toBeInTheDocument()
+    expect(within(screen.getByLabelText('changed-files')).queryByText('backend/tests/test_schema.py')).not.toBeInTheDocument()
     expect(screen.getByText('Unresolved Review Queue')).toBeInTheDocument()
     expect(screen.getByText('workspace changed outside target')).toBeInTheDocument()
     expect(screen.getAllByText('backend/schema.py').length).toBeGreaterThan(0)
@@ -130,5 +167,23 @@ describe('PrecommitReviewPage', () => {
 
     await waitFor(() => expect(api.runVerificationCommand).toHaveBeenCalledWith('', 'pr_1', 'pytest'))
     await waitFor(() => expect(screen.getAllByText('failed · exit 1 · aligned').length).toBeGreaterThan(0))
+  })
+
+  it('preserves test management and language switching in the precommit console', async () => {
+    render(<PrecommitReviewPage />)
+
+    expect(await screen.findByText('Review')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Tests' }))
+
+    expect(screen.getByText('Test Files')).toBeInTheDocument()
+    expect(within(screen.getByLabelText('changed-files')).getByText('backend/tests/test_schema.py')).toBeInTheDocument()
+    expect(within(screen.getByLabelText('changed-files')).queryByText('backend/schema.py')).not.toBeInTheDocument()
+    expect(screen.getByText('def test_value():')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '简体中文' }))
+
+    expect(screen.getByText('测试文件')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '审查' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '测试' })).toHaveAttribute('aria-pressed', 'true')
   })
 })
