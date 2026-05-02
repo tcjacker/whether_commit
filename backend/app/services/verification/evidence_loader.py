@@ -18,7 +18,9 @@ class VerificationEvidenceLoader:
             "warnings": [],
         }
         result["unit"].extend(self._load_junit_report("pytest.xml", result["warnings"]))
+        result["unit"].extend(self._load_junit_report(".agent-test-results/pytest.xml", result["warnings"]))
         result["integration"].extend(self._load_junit_report("integration.xml", result["warnings"]))
+        result["integration"].extend(self._load_junit_report(".agent-test-results/integration.xml", result["warnings"]))
         result["scenario"].extend(self._load_scenario_report(result["warnings"]))
 
         if not result["unit"] and not result["integration"] and not result["scenario"]:

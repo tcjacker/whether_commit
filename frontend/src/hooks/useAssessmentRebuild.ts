@@ -45,6 +45,7 @@ export function useAssessmentRebuild(repoKey: string, workspacePath: string, rel
       const response = await triggerAssessmentRebuild({
         repo_key: repoKey,
         workspace_path: workspacePath || undefined,
+        base_commit_sha: 'AUTO_MERGE_BASE',
       })
       setJob({
         job_id: response.job_id,

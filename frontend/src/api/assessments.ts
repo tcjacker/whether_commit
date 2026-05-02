@@ -5,6 +5,10 @@ import type {
   ChangedFileSummary,
   RebuildRequest,
   RebuildResponse,
+  TestCaseDetail,
+  TestCommandRunResult,
+  TestManagementSummary,
+  TestResultAnalysis,
 } from '../types/api'
 
 export function triggerAssessmentRebuild(req: RebuildRequest): Promise<RebuildResponse> {
@@ -36,6 +40,57 @@ export function fetchAssessmentFileDetail(
   const params = new URLSearchParams({ repo_key: repoKey })
   if (workspacePath?.trim()) params.set('workspace_path', workspacePath.trim())
   return get<ChangedFileDetail>(`/api/assessments/${assessmentId}/files/${fileId}?${params}`)
+}
+
+export function fetchAssessmentTests(
+  repoKey: string,
+  assessmentId: string,
+  workspacePath?: string,
+): Promise<TestManagementSummary> {
+  const params = new URLSearchParams({ repo_key: repoKey })
+  if (workspacePath?.trim()) params.set('workspace_path', workspacePath.trim())
+  return get<TestManagementSummary>(`/api/assessments/${assessmentId}/tests?${params}`)
+}
+
+export function fetchAssessmentTestCaseDetail(
+  repoKey: string,
+  assessmentId: string,
+  testCaseId: string,
+  workspacePath?: string,
+): Promise<TestCaseDetail> {
+  const params = new URLSearchParams({ repo_key: repoKey })
+  if (workspacePath?.trim()) params.set('workspace_path', workspacePath.trim())
+  return get<TestCaseDetail>(`/api/assessments/${assessmentId}/tests/${testCaseId}?${params}`)
+}
+
+export function runAssessmentTestCommand(
+  repoKey: string,
+  assessmentId: string,
+  testCaseId: string,
+  commandId: string,
+  workspacePath?: string,
+): Promise<TestCommandRunResult> {
+  const params = new URLSearchParams({ repo_key: repoKey })
+  if (workspacePath?.trim()) params.set('workspace_path', workspacePath.trim())
+  return post<TestCommandRunResult>(
+    `/api/assessments/${assessmentId}/tests/${testCaseId}/commands/${commandId}/run?${params}`,
+    {},
+  )
+}
+
+export function analyzeAssessmentTestResult(
+  repoKey: string,
+  assessmentId: string,
+  testCaseId: string,
+  runId: string,
+  workspacePath?: string,
+): Promise<TestResultAnalysis> {
+  const params = new URLSearchParams({ repo_key: repoKey })
+  if (workspacePath?.trim()) params.set('workspace_path', workspacePath.trim())
+  return post<TestResultAnalysis>(
+    `/api/assessments/${assessmentId}/tests/${testCaseId}/results/${runId}/analyze?${params}`,
+    {},
+  )
 }
 
 export function triggerFileAgentAssessment(

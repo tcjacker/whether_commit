@@ -1,8 +1,9 @@
 import type { ChangedFileDetail } from '../../types/api'
+import { t, type Language } from '../../i18n'
 import styles from './FileDiffReview.module.css'
 
-export function FileDiffReview({ detail }: { detail: ChangedFileDetail | null }) {
-  if (!detail) return <main className={styles.panel}>Select a file to review its diff.</main>
+export function FileDiffReview({ detail, language = 'en-US' }: { detail: ChangedFileDetail | null, language?: Language }) {
+  if (!detail) return <main className={styles.panel}>{t(language, 'selectFileForDiff')}</main>
   const hunkItems = detail.hunk_review_items ?? []
   return (
     <main className={styles.panel} aria-label="file-diff">
@@ -18,7 +19,7 @@ export function FileDiffReview({ detail }: { detail: ChangedFileDetail | null })
               {hunkItems
                 .filter(item => item.hunk_id === hunk.hunk_id)
                 .map(item => (
-                  <strong key={item.hunk_id}>Priority {item.priority}</strong>
+                  <strong key={item.hunk_id}>{t(language, 'priority')} {item.priority}</strong>
                 ))}
             </div>
             {hunk.lines.map((line, index) => (

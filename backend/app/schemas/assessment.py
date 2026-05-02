@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, ClassVar, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -18,6 +18,23 @@ AssessmentMode = Literal["working_tree", "commit_range", "pull_request"]
 EvidenceGrade = Literal["direct", "indirect", "inferred", "claimed", "not_run", "unknown"]
 ClaimType = Literal["refactor", "bugfix", "feature", "test", "config", "docs", "cleanup", "unknown"]
 ReviewDecision = Literal["safe_to_commit", "needs_recheck", "needs_tests", "do_not_commit_yet", "unknown"]
+TestCaseStatus = Literal["added", "modified", "deleted", "unknown"]
+TestExtractionConfidence = Literal["certain", "heuristic", "fallback"]
+TestIntentSource = Literal["rule_derived", "agent_claim", "generated", "unknown"]
+CoveredChangeRelationship = Literal[
+    "calls",
+    "imports",
+    "shares_fixture",
+    "co_changed",
+    "names_changed_symbol",
+    "same_file",
+    "graph_inferred",
+    "unknown",
+]
+CommandScope = Literal["test_case", "test_file", "changed_area", "assessment"]
+CommandStatus = Literal["not_run", "running", "passed", "failed", "partial", "unknown"]
+TestRunEvidenceSource = Literal["codex_command_log", "rerun"]
+ExecutedTestCaseSource = Literal["runner_output", "collect_only", "test_file_parse"]
 MismatchKind = Literal[
     "claimed_refactor_but_public_surface_changed",
     "claimed_tested_but_no_executed_test_evidence",
@@ -245,6 +262,182 @@ class HunkReviewItem(BaseModel):
     fact_basis: List[str] = Field(default_factory=list)
     provenance_refs: List[ProvenanceRef] = Field(default_factory=list)
     mismatch_ids: List[str] = Field(default_factory=list)
+
+
+class TestIntentSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    __test__: ClassVar[bool] = False
+
+    text: str = ""
+    source: TestIntentSource = "unknown"
+    basis: List[str] = Field(default_factory=list)
+
+
+class CoveredChangePreview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    path: str
+    hunk_id: Optional[str] = None
+    risk_level: RiskLevel = "unknown"
+    evidence_grade: EvidenceGrade = "unknown"
+
+
+class TestCaseSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    __test__: ClassVar[bool] = False
+
+    test_case_id: str
+    file_id: str
+    path: str
+    name: str
+    status: TestCaseStatus = "unknown"
+    extraction_confidence: TestExtractionConfidence = "fallback"
+    evidence_grade: EvidenceGrade = "unknown"
+    weakest_evidence_grade: EvidenceGrade = "unknown"
+    last_status: Literal["passed", "failed", "not_run", "unknown"] = "unknown"
+    covered_changes_preview: List[CoveredChangePreview] = Field(default_factory=list)
+    highest_risk_covered_hunk_id: Optional[str] = None
+    intent_summary: TestIntentSummary = Field(default_factory=TestIntentSummary)
+
+
+class CoveredChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    path: str
+    symbol: str = ""
+    hunk_id: str = ""
+    relationship: CoveredChangeRelationship = "unknown"
+    evidence_grade: EvidenceGrade = "unknown"
+    basis: List[str] = Field(default_factory=list)
+
+
+class TestCoveredScenario(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    __test__: ClassVar[bool] = False
+
+    title: str
+    source: TestIntentSource = "rule_derived"
+    basis: List[str] = Field(default_factory=list)
+
+
+class ExecutedTestCase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    __test__: ClassVar[bool] = False
+
+    node_id: str
+    name: str
+    status: Literal["passed", "failed", "skipped", "unknown"] = "unknown"
+    source: ExecutedTestCaseSource = "test_file_parse"
+    scenarios: List[TestCoveredScenario] = Field(default_factory=list)
+    test_data: List[str] = Field(default_factory=list)
+
+
+class TestCoveredCodeAnalysis(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    __test__: ClassVar[bool] = False
+
+    path: str
+    symbol: str = ""
+    hunk_id: str = ""
+    relationship: CoveredChangeRelationship = "unknown"
+    evidence_grade: EvidenceGrade = "unknown"
+    analysis: str = ""
+    basis: List[str] = Field(default_factory=list)
+
+
+class TestResultAnalysis(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    __test__: ClassVar[bool] = False
+
+    summary: str = ""
+    scenarios: List[TestCoveredScenario] = Field(default_factory=list)
+    test_data: List[str] = Field(default_factory=list)
+    covered_code_analysis: List[TestCoveredCodeAnalysis] = Field(default_factory=list)
+    coverage_gaps: List[str] = Field(default_factory=list)
+    source: TestIntentSource = "rule_derived"
+    basis: List[str] = Field(default_factory=list)
+
+
+class TestRunEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    __test__: ClassVar[bool] = False
+
+    run_id: str
+    source: TestRunEvidenceSource
+    command_id: str = ""
+    command: str
+    status: CommandStatus = "unknown"
+    exit_code: Optional[int] = None
+    duration_ms: int = 0
+    stdout: str = ""
+    stderr: str = ""
+    stdout_truncated: bool = False
+    stderr_truncated: bool = False
+    timed_out: bool = False
+    argv: List[str] = Field(default_factory=list)
+    executed_cases: List[ExecutedTestCase] = Field(default_factory=list)
+    analysis: TestResultAnalysis = Field(default_factory=TestResultAnalysis)
+    started_at: str = ""
+    finished_at: str = ""
+    captured_at: str = ""
+    evidence_grade: EvidenceGrade = "unknown"
+
+
+class RecommendedTestCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    command_id: str
+    command: str
+    reason: str = ""
+    scope: CommandScope = "test_file"
+    status: CommandStatus = "not_run"
+    last_run_id: Optional[str] = None
+
+
+class TestCaseDetail(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    __test__: ClassVar[bool] = False
+
+    test_case: TestCaseSummary
+    diff_hunks: List[DiffHunk] = Field(default_factory=list)
+    full_body: List[DiffLine] = Field(default_factory=list)
+    assertions: List[DiffLine] = Field(default_factory=list)
+    covered_scenarios: List[TestCoveredScenario] = Field(default_factory=list)
+    test_results: List[TestRunEvidence] = Field(default_factory=list)
+    covered_changes: List[CoveredChange] = Field(default_factory=list)
+    recommended_commands: List[RecommendedTestCommand] = Field(default_factory=list)
+    related_agent_claims: List[AgentClaim] = Field(default_factory=list)
+    unknowns: List[str] = Field(default_factory=list)
+
+
+class TestFileSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    __test__: ClassVar[bool] = False
+
+    file_id: str
+    path: str
+    status: str = "modified"
+    additions: int = 0
+    deletions: int = 0
+    test_case_count: int = 0
+    strongest_evidence_grade: EvidenceGrade = "unknown"
+    weakest_evidence_grade: EvidenceGrade = "unknown"
+    latest_command_status: CommandStatus = "unknown"
+    test_cases: List[TestCaseSummary] = Field(default_factory=list)
+
+
+class TestManagementSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    __test__: ClassVar[bool] = False
+
+    assessment_id: str
+    repo_key: str
+    changed_test_file_count: int = 0
+    test_case_count: int = 0
+    evidence_grade_counts: Dict[str, int] = Field(default_factory=dict)
+    command_status_counts: Dict[str, int] = Field(default_factory=dict)
+    files: List[TestFileSummary] = Field(default_factory=list)
+    unknowns: List[str] = Field(default_factory=list)
 
 
 class FileAssessment(BaseModel):

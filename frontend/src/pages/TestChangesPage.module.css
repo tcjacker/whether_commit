@@ -1,0 +1,163 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: auto;
+  padding: 20px 24px 0;
+  background: #f6f7f9;
+  color: #1f2937;
+}
+
+.header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #d9dee7;
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  color: #546179;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.header h1 {
+  margin: 0;
+  color: #111827;
+  font-size: 30px;
+  line-height: 1.1;
+}
+
+.subtitle {
+  margin: 8px 0 0;
+  color: #4b5563;
+  font-size: 14px;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.actionRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.languageToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid #cfd6e3;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.languageToggle button {
+  min-width: 76px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #4b5563;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.languageToggle button:hover {
+  background: #eef2ff;
+  color: #111827;
+}
+
+.activeLanguage {
+  background: #111827 !important;
+  color: #ffffff !important;
+}
+
+.actionRow a,
+.actionRow button {
+  border: 1px solid #cfd6e3;
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: #fff;
+  color: #1f2937;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.actionRow button {
+  background: #111827;
+  color: #fff;
+  cursor: pointer;
+}
+
+.actionRow button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.rebuildStatus {
+  flex: 0 0 auto;
+  margin: 10px 0 0;
+  color: #546179;
+  font-size: 13px;
+}
+
+.emptyState {
+  flex: 0 0 auto;
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid #d9dee7;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.emptyState h2 {
+  margin: 0 0 6px;
+  color: #111827;
+  font-size: 16px;
+}
+
+.emptyState p {
+  margin: 0;
+  color: #546179;
+}
+
+.workspace {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(520px, 1fr) minmax(360px, 460px);
+  gap: 1px;
+  min-height: 0;
+  min-width: 1160px;
+  margin-top: 12px;
+  border-top: 1px solid #d9dee7;
+  background: #d9dee7;
+}
+
+.workspace > * {
+  min-height: 0;
+  overflow: auto;
+}
+
+.center {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background: #f6f7f9;
+  color: #1f2937;
+}

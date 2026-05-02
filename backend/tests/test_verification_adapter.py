@@ -70,6 +70,39 @@ class VerificationAdapterTest(unittest.TestCase):
         self.assertEqual(result["evidence_by_path"]["app/main.py"]["strength"], "strong")
         self.assertEqual(result["evidence_by_path"]["app/main.py"]["status"], "report-backed")
 
+    def test_agent_test_results_junit_report_is_loaded(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            artifact_dir = os.path.join(tmp_dir, ".agent-test-results")
+            os.makedirs(artifact_dir)
+            with open(os.path.join(artifact_dir, "pytest.xml"), "w", encoding="utf-8") as f:
+                f.write(
+                    dedent(
+                        """
+                        <testsuite tests="1" failures="0" errors="0">
+                          <testcase classname="tests.test_main" name="test_main">
+                            <properties>
+                              <property name="file_path" value="app/main.py" />
+                            </properties>
+                          </testcase>
+                        </testsuite>
+                        """
+                    ).strip()
+                )
+
+            adapter = VerificationAdapter(workspace_path=tmp_dir)
+            result = adapter.aggregate_verification(
+                {
+                    "changed_files": ["app/main.py"],
+                    "directly_changed_modules": ["mod_app"],
+                    "linked_tests": ["tests/test_main.py"],
+                }
+            )
+
+        self.assertTrue(result["test_report_present"])
+        self.assertEqual(result["unit_tests"]["status"], "passed")
+        self.assertEqual(result["verification_evidence"]["unit"][0]["source_report"], ".agent-test-results/pytest.xml")
+        self.assertEqual(result["evidence_by_path"]["app/main.py"]["strength"], "strong")
+
     def test_change_aware_verification_binds_paths_and_impacts_conservatively(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             with open(os.path.join(tmp_dir, "pytest.xml"), "w", encoding="utf-8") as f:

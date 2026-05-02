@@ -121,6 +121,7 @@ class JobManager:
         
         # Determine actual workspace path to analyze
         actual_workspace_path = self._resolve_workspace_path(repo_key, workspace_path)
+        base_commit_sha = self.workspace_snapshot_service.resolve_base_commit(actual_workspace_path, base_commit_sha)
 
         job = JobState(
             job_id=job_id,
@@ -304,6 +305,7 @@ class JobManager:
         review_graph_data: Dict[str, Any],
     ) -> Dict[str, Any]:
         change_data = self._ensure_agent_activity_evidence(job, change_data)
+        change_data = {**change_data, "workspace_path": job.workspace_path}
         agent_records = [
             *self.agent_log_record_adapter.build(
                 workspace_snapshot_id=job.workspace_snapshot_id,
@@ -334,6 +336,23 @@ class JobManager:
                 job.repo_key,
                 job.workspace_snapshot_id,
                 file_id,
+                detail,
+                workspace_path=job.workspace_path,
+            )
+        test_management = assessment_data.get("test_management", {})
+        summary = test_management.get("summary")
+        if summary:
+            snapshot_store.save_test_management_summary(
+                job.repo_key,
+                job.workspace_snapshot_id,
+                summary,
+                workspace_path=job.workspace_path,
+            )
+        for test_case_id, detail in test_management.get("test_case_details", {}).items():
+            snapshot_store.save_test_case_detail(
+                job.repo_key,
+                job.workspace_snapshot_id,
+                test_case_id,
                 detail,
                 workspace_path=job.workspace_path,
             )

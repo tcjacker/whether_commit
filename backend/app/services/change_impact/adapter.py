@@ -53,10 +53,31 @@ class ChangeImpactAdapter:
         )
         return result.stdout
 
+    def _git_name_status_lines(self) -> List[str]:
+        result = subprocess.run(
+            ["git", "diff", "--name-status", self.base_commit_sha, "HEAD"],
+            cwd=self.workspace_path,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return [line.rstrip("\n") for line in result.stdout.splitlines() if line.rstrip("\n")]
+
+    def _git_range_diff_for_file(self, file_path: str) -> str:
+        result = subprocess.run(
+            ["git", "diff", self.base_commit_sha, "HEAD", "--", file_path],
+            cwd=self.workspace_path,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return result.stdout
+
     def _last_commit_timestamp(self) -> int | None:
+        commit_ref = self.base_commit_sha if self.base_commit_sha != "HEAD" else "HEAD"
         try:
             result = subprocess.run(
-                ["git", "log", "-1", "--format=%ct"],
+                ["git", "log", "-1", "--format=%ct", commit_ref],
                 cwd=self.workspace_path,
                 capture_output=True,
                 text=True,
@@ -146,6 +167,17 @@ class ChangeImpactAdapter:
                 f"@@ -0,0 +1,{len(lines)} @@",
             ]
             return "\n".join(header + [f"+{line.rstrip(chr(10))}" for line in lines]) + "\n"
+
+        if self.base_commit_sha != "HEAD":
+            return "\n".join(
+                diff
+                for diff in [
+                    self._git_range_diff_for_file(path),
+                    self._git_diff_for_file(path, staged=True),
+                    self._git_diff_for_file(path, staged=False),
+                ]
+                if diff
+            )
 
         return "\n".join(
             diff
@@ -527,13 +559,38 @@ class ChangeImpactAdapter:
 
     def _status_entries(self) -> List[Dict[str, str]]:
         entries: List[Dict[str, str]] = []
-        for line in self._git_status_lines():
+        lines = self._git_status_lines() if self.base_commit_sha == "HEAD" else self._range_status_lines()
+        for line in lines:
             entry = self._parse_status_entry(line)
             if not entry["path"]:
                 continue
             if entry["path"].endswith(self.SUPPORTED_PATH_SUFFIXES):
                 entries.append(entry)
         return entries
+
+    def _range_status_lines(self) -> List[str]:
+        status_lines = [self._name_status_to_porcelain(line) for line in self._git_name_status_lines()]
+        existing_paths = {self._parse_status_entry(line)["path"] for line in status_lines if self._parse_status_entry(line)["path"]}
+        for line in self._git_status_lines():
+            entry = self._parse_status_entry(line)
+            if entry["path"] and entry["path"] not in existing_paths:
+                status_lines.append(line)
+        return status_lines
+
+    def _name_status_to_porcelain(self, line: str) -> str:
+        parts = line.split("\t")
+        status = parts[0]
+        path = parts[-1] if parts else ""
+        marker = status[:1]
+        if marker == "M":
+            return f" M {path}"
+        if marker == "A":
+            return f" A {path}"
+        if marker == "D":
+            return f" D {path}"
+        if marker == "R":
+            return f" R {path}"
+        return f" M {path}"
 
     def _module_keys_for_files(self, changed_files: List[str]) -> List[str]:
         module_ids = set()

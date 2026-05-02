@@ -46,6 +46,25 @@ class WorkspaceSnapshotServiceTest(unittest.TestCase):
         self.assertFalse(snapshot.has_pending_changes)
         self.assertEqual(snapshot.changed_files, [])
 
+    def test_capture_uses_commit_range_when_base_is_not_head(self):
+        service = WorkspaceSnapshotService()
+
+        def fake_run(cmd, cwd, capture_output, text, check):
+            if cmd[:2] == ["git", "rev-parse"]:
+                return SimpleNamespace(stdout="true\n")
+            if cmd[:3] == ["git", "diff", "--name-status"]:
+                return SimpleNamespace(stdout="M\tbackend/tests/test_builder.py\nA\tAGENTS.md\n")
+            return SimpleNamespace(stdout="")
+
+        with tempfile.TemporaryDirectory() as tmp_dir, patch(
+            "app.services.workspace_snapshot.service.subprocess.run", side_effect=fake_run
+        ):
+            snapshot = service.capture("demo", tmp_dir, base_commit_sha="main", include_untracked=True)
+
+        self.assertTrue(snapshot.has_pending_changes)
+        self.assertEqual(snapshot.changed_files, ["AGENTS.md", "backend/tests/test_builder.py"])
+        self.assertEqual(snapshot.status_lines, [" M backend/tests/test_builder.py", " A AGENTS.md"])
+
 
 class JobManagerTest(unittest.IsolatedAsyncioTestCase):
     async def test_trigger_rebuild_resolves_workspace_path_from_local_candidates(self):
@@ -73,6 +92,9 @@ class JobManagerTest(unittest.IsolatedAsyncioTestCase):
         captured = {}
 
         class _FakeWorkspaceSnapshotService:
+            def resolve_base_commit(self, workspace_path, base_commit_sha):
+                return base_commit_sha
+
             def capture(self, repo_key, workspace_path, base_commit_sha, include_untracked):
                 captured["include_untracked"] = include_untracked
                 return WorkspaceSnapshotState(

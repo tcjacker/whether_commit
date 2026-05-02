@@ -44,5 +44,10 @@ describe('useAssessmentRebuild', () => {
     await waitFor(() => expect(fetchJob).toHaveBeenCalledWith('job_1'), { timeout: 1500 })
     await waitFor(() => expect(result.current.isRebuilding).toBe(false))
     expect(result.current.job).toBeNull()
+    expect(triggerAssessmentRebuild).toHaveBeenCalledWith({
+      repo_key: 'demo',
+      workspace_path: '/repo',
+      base_commit_sha: 'AUTO_MERGE_BASE',
+    })
   })
 })
