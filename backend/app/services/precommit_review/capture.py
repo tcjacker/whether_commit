@@ -117,8 +117,8 @@ class PrecommitCaptureService:
         return WorkspaceStateFingerprint(
             repo_head_sha=self._repo_head_sha(),
             index_tree_hash=self._index_tree_hash(),
-            working_tree_fingerprint=_digest(self._git("status", "--porcelain=v1").splitlines()),
-            untracked_fingerprint=_digest(self._git("ls-files", "--others", "--exclude-standard").splitlines()),
+            working_tree_fingerprint=_digest(_filter_tool_owned_status(self._git("status", "--porcelain=v1").splitlines())),
+            untracked_fingerprint=_digest(_filter_tool_owned_paths(self._git("ls-files", "--others", "--exclude-standard").splitlines())),
         )
 
     def _changed_staged_files(self) -> list[str]:
@@ -144,3 +144,22 @@ class PrecommitCaptureService:
 
 def _digest(parts: list[str]) -> str:
     return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()[:16]
+
+
+def _filter_tool_owned_status(lines: list[str]) -> list[str]:
+    return [line for line in lines if not _status_line_is_tool_owned(line)]
+
+
+def _filter_tool_owned_paths(paths: list[str]) -> list[str]:
+    return [path for path in paths if not _is_tool_owned_path(path)]
+
+
+def _status_line_is_tool_owned(line: str) -> bool:
+    path = line[3:] if len(line) > 3 else line
+    paths = path.split(" -> ") if " -> " in path else [path]
+    return all(_is_tool_owned_path(candidate) for candidate in paths)
+
+
+def _is_tool_owned_path(path: str) -> bool:
+    normalized = path.strip()
+    return normalized == ".precommit-review" or normalized.startswith(".precommit-review/")

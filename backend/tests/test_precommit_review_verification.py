@@ -40,6 +40,19 @@ def test_failed_tool_launched_verification_forces_not_recommended(tmp_path):
     assert any(signal["policy_rule_id"] == "failed_tool_launched_verification" for signal in current["signals"])
 
 
+def test_tool_owned_storage_does_not_make_clean_verification_misaligned(tmp_path):
+    repo = make_repo(tmp_path)
+    (repo / "backend" / "schema.py").write_text("value = 2\n", encoding="utf-8")
+    run_git(repo, "add", "backend/schema.py")
+    snapshot = PrecommitReviewBuilder(str(repo)).rebuild()
+
+    run = VerificationRunner(str(repo)).run(snapshot["snapshot_id"], f"{sys.executable} -c 'import sys; sys.exit(0)'")
+
+    assert run["status"] == "passed"
+    assert run["target_aligned"] is True
+    assert run["display_status"] == "executed"
+
+
 def test_working_tree_verification_misaligned_with_staged_target_cannot_clear_high_risk(tmp_path):
     repo = make_repo(tmp_path)
     (repo / "backend" / "schema.py").write_text("value = 2\n", encoding="utf-8")
