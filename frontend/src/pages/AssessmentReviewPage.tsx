@@ -108,9 +108,9 @@ export function AssessmentReviewPage() {
         onLanguageChange={handleLanguageChange}
       />
       <div className={styles.workspace}>
-        <ChangedFileList files={reviewFiles} selectedFileId={selectedFileId} onSelect={handleSelect} />
-        <FileDiffReview detail={detail} />
-        <FileEvidencePanel detail={detail} onRunAgent={handleRunAgent} running={agentRunningFileId === selectedFileId} />
+        <ChangedFileList files={reviewFiles} selectedFileId={selectedFileId} onSelect={handleSelect} language={language} />
+        <FileDiffReview detail={detail} language={language} />
+        <FileEvidencePanel detail={detail} onRunAgent={handleRunAgent} running={agentRunningFileId === selectedFileId} language={language} />
       </div>
     </div>
   )

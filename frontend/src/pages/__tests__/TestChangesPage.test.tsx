@@ -1,8 +1,28 @@
-import { render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  analyzeAssessmentTestResult,
+  fetchAssessmentTestCaseDetail,
+  fetchAssessmentTests,
+  fetchLatestAssessment,
+} from '../../api/assessments'
 import { TestChangesPage } from '../TestChangesPage'
 
 vi.mock('../../api/assessments', () => ({
+  analyzeAssessmentTestResult: vi.fn(async () => ({
+    summary: 'Codex Agent analyzed 1 executed case and found the review signal scenario.',
+    scenarios: [
+      {
+        title: 'Scenario named by test: test builder emits review signals.',
+        source: 'generated',
+        basis: ['codex_agent', 'test_name'],
+      },
+    ],
+    test_data: ['Literal test data: needs_tests'],
+    coverage_gaps: [],
+    source: 'generated',
+    basis: ['codex_agent', 'stored_run', 'test_code'],
+  })),
   fetchLatestAssessment: vi.fn(async () => ({
     assessment_id: 'aca_ws_1',
     workspace_snapshot_id: 'ws_1',
@@ -30,29 +50,29 @@ vi.mock('../../api/assessments', () => ({
       affected_capability_count: 0,
       missing_test_count: 0,
       agent_sources: ['git_diff'],
-      recommended_review_order: ['backend/app/main.py', 'backend/tests/test_main.py'],
+      recommended_review_order: ['backend/app/schemas/assessment.py', 'backend/tests/test_builder.py'],
     },
     file_list: [
       {
-        file_id: 'cf_app123',
-        path: 'backend/app/main.py',
+        file_id: 'cf_schema',
+        path: 'backend/app/schemas/assessment.py',
         old_path: null,
         status: 'modified',
-        additions: 2,
-        deletions: 1,
-        risk_level: 'low',
-        coverage_status: 'unknown',
+        additions: 22,
+        deletions: 4,
+        risk_level: 'medium',
+        coverage_status: 'covered',
         review_status: 'unreviewed',
         agent_sources: ['git_diff'],
-        diff_fingerprint: 'sha256:app',
+        diff_fingerprint: 'sha256:schema',
       },
       {
-        file_id: 'cf_test123',
-        path: 'backend/tests/test_main.py',
+        file_id: 'cf_tests',
+        path: 'backend/tests/test_builder.py',
         old_path: null,
         status: 'modified',
-        additions: 4,
-        deletions: 0,
+        additions: 18,
+        deletions: 1,
         risk_level: 'low',
         coverage_status: 'covered',
         review_status: 'unreviewed',
@@ -64,66 +84,407 @@ vi.mock('../../api/assessments', () => ({
     agent_sources: ['git_diff'],
     review_progress: { total: 2, reviewed: 0, needs_follow_up: 0, needs_recheck: 0, unreviewed: 2 },
   })),
-  fetchAssessmentFileDetail: vi.fn(async () => ({
-    file: {
-      file_id: 'cf_test123',
-      path: 'backend/tests/test_main.py',
-      old_path: null,
+  fetchAssessmentTests: vi.fn(async () => ({
+    assessment_id: 'aca_ws_1',
+    repo_key: 'demo',
+    changed_test_file_count: 1,
+    test_case_count: 1,
+    evidence_grade_counts: { direct: 1 },
+    command_status_counts: { not_run: 1 },
+    unknowns: [],
+    files: [
+      {
+        file_id: 'tf_builder',
+        path: 'backend/tests/test_builder.py',
+        status: 'modified',
+        additions: 18,
+        deletions: 1,
+        test_case_count: 1,
+        strongest_evidence_grade: 'direct',
+        weakest_evidence_grade: 'direct',
+        latest_command_status: 'not_run',
+        test_cases: [
+          {
+            test_case_id: 'tc_review_signals',
+            file_id: 'tf_builder',
+            path: 'backend/tests/test_builder.py',
+            name: 'test_builder_emits_review_signals',
+            status: 'modified',
+            extraction_confidence: 'certain',
+            evidence_grade: 'direct',
+            weakest_evidence_grade: 'direct',
+            last_status: 'not_run',
+            covered_changes_preview: [
+              {
+                path: 'backend/app/schemas/assessment.py',
+                hunk_id: 'hunk_review_signal_schema',
+                risk_level: 'medium',
+                evidence_grade: 'direct',
+              },
+            ],
+            highest_risk_covered_hunk_id: 'hunk_review_signal_schema',
+            intent_summary: {
+              text: 'Ensures the test builder emits review signals.',
+              source: 'rule_derived',
+              basis: ['test name mentions review signals', 'assertions inspect result payload'],
+            },
+          },
+          {
+            test_case_id: 'tc_command_paths',
+            file_id: 'tf_builder',
+            path: 'backend/tests/test_builder.py',
+            name: 'test_builder_emits_command_paths',
+            status: 'modified',
+            extraction_confidence: 'certain',
+            evidence_grade: 'direct',
+            weakest_evidence_grade: 'direct',
+            last_status: 'not_run',
+            covered_changes_preview: [
+              {
+                path: 'backend/app/schemas/assessment.py',
+                hunk_id: 'hunk_command_paths_schema',
+                risk_level: 'low',
+                evidence_grade: 'direct',
+              },
+            ],
+            highest_risk_covered_hunk_id: 'hunk_command_paths_schema',
+            intent_summary: {
+              text: 'Ensures the test builder emits command paths.',
+              source: 'rule_derived',
+              basis: ['test name mentions command paths', 'assertions inspect command payload'],
+            },
+          },
+        ],
+      },
+    ],
+  })),
+  fetchAssessmentTestCaseDetail: vi.fn(async () => ({
+    test_case: {
+      test_case_id: 'tc_review_signals',
+      file_id: 'tf_builder',
+      path: 'backend/tests/test_builder.py',
+      name: 'test_builder_emits_review_signals',
       status: 'modified',
-      additions: 4,
-      deletions: 0,
-      risk_level: 'low',
-      coverage_status: 'covered',
-      review_status: 'unreviewed',
-      agent_sources: ['git_diff'],
-      diff_fingerprint: 'sha256:test',
+      extraction_confidence: 'certain',
+      evidence_grade: 'direct',
+      weakest_evidence_grade: 'direct',
+      last_status: 'not_run',
+      covered_changes_preview: [
+        {
+          path: 'backend/app/schemas/assessment.py',
+          hunk_id: 'hunk_review_signal_schema',
+          risk_level: 'medium',
+          evidence_grade: 'direct',
+        },
+      ],
+      highest_risk_covered_hunk_id: 'hunk_review_signal_schema',
+      intent_summary: {
+        text: 'Ensures the test builder emits review signals.',
+        source: 'rule_derived',
+        basis: ['test name mentions review signals', 'assertions inspect result payload'],
+      },
     },
-    diff_hunks: [{
-      hunk_id: 'hunk_001',
-      old_start: 1,
-      old_lines: 1,
-      new_start: 1,
-      new_lines: 2,
-      hunk_fingerprint: 'sha256:def',
-      lines: [{ type: 'add', content: 'assert response.status_code == 200' }],
-    }],
-    changed_symbols: [],
-    related_agent_records: [],
-    related_tests: [],
-    impact_facts: [],
-    file_assessment: {
-      why_changed: 'No structured agent reason is available.',
-      impact_summary: 'Review the diff.',
-      test_summary: 'No direct test evidence was found.',
-      recommended_action: 'Review this file manually.',
-      generated_by: 'rules',
-      agent_status: 'not_run',
-      agent_source: null,
-      confidence: 'low',
-      evidence_refs: ['git_diff'],
-      unknowns: ['Codex agent assessment has not run.'],
-    },
-    review_state: {
-      review_status: 'unreviewed',
-      diff_fingerprint: 'sha256:test',
-      reviewer: null,
-      reviewed_at: null,
-      notes: [],
-    },
+    diff_hunks: [
+      {
+        hunk_id: 'test_hunk_1',
+        old_start: 20,
+        old_lines: 2,
+        new_start: 20,
+        new_lines: 4,
+        hunk_fingerprint: 'sha256:test-hunk',
+        lines: [
+          { type: 'context', content: 'result = build_test_management_summary(change_set)' },
+          { type: 'add', content: 'assert result' },
+        ],
+      },
+    ],
+    full_body: [
+      { type: 'context', content: 'def test_builder_emits_review_signals():' },
+      { type: 'context', content: '    result = build_test_management_summary(change_set)' },
+      { type: 'add', content: '    assert result' },
+    ],
+    assertions: [
+      { type: 'add', content: 'assert result' },
+    ],
+    covered_scenarios: [
+      {
+        title: 'Scenario named by test: test builder emits review signals.',
+        source: 'rule_derived',
+        basis: ['test_name'],
+      },
+    ],
+    test_results: [
+      {
+        run_id: 'run_builder',
+        source: 'rerun',
+        command: 'uv run pytest backend/tests/test_builder.py',
+        status: 'passed',
+        exit_code: 0,
+        duration_ms: 321,
+        stdout: 'backend/tests/test_builder.py::test_builder_emits_review_signals PASSED',
+        stderr: '',
+        executed_cases: [
+          {
+            node_id: 'backend/tests/test_builder.py::test_builder_emits_review_signals',
+            name: 'test_builder_emits_review_signals',
+            status: 'passed',
+            source: 'collect_only',
+            scenarios: [],
+            test_data: [],
+          },
+        ],
+        analysis: {
+          summary: '1 test case was associated with this run.',
+          scenarios: [],
+          test_data: [],
+          coverage_gaps: [],
+          source: 'rule_derived',
+          basis: ['runner_output', 'collect_only'],
+        },
+        captured_at: '2026-04-26T00:00:00Z',
+        evidence_grade: 'direct',
+      },
+    ],
+    covered_changes: [
+      {
+        path: 'backend/app/schemas/assessment.py',
+        symbol: 'TestCaseSummary',
+        hunk_id: 'hunk_review_signal_schema',
+        relationship: 'asserts_behavior',
+        evidence_grade: 'direct',
+        basis: ['assertion validates result payload'],
+      },
+    ],
+    recommended_commands: [
+      {
+        command_id: 'cmd_builder',
+        command: 'uv run pytest backend/tests/test_builder.py',
+        reason: 'Run the changed builder test.',
+        scope: 'test_case',
+        status: 'not_run',
+        last_run_id: null,
+      },
+    ],
+    related_agent_claims: [],
+    unknowns: [],
+  })),
+  triggerAssessmentRebuild: vi.fn(async () => ({
+    job_id: 'job_1',
+    repo_key: 'demo',
+    status: 'success',
+    step: 'complete',
+    progress: 1,
+    message: 'done',
+    created_at: '2026-04-26T00:00:00Z',
+    updated_at: '2026-04-26T00:00:00Z',
   })),
 }))
 
+function testCaseDetailFixture(testCaseId: string, name: string, assertion: string) {
+  return {
+    test_case: {
+      test_case_id: testCaseId,
+      file_id: 'tf_builder',
+      path: 'backend/tests/test_builder.py',
+      name,
+      status: 'modified' as const,
+      extraction_confidence: 'certain' as const,
+      evidence_grade: 'direct' as const,
+      weakest_evidence_grade: 'direct' as const,
+      last_status: 'not_run' as const,
+      covered_changes_preview: [
+        {
+          path: 'backend/app/schemas/assessment.py',
+          hunk_id: 'hunk_review_signal_schema',
+          risk_level: 'medium' as const,
+          evidence_grade: 'direct' as const,
+        },
+      ],
+      highest_risk_covered_hunk_id: 'hunk_review_signal_schema',
+      intent_summary: {
+        text: 'Ensures the test builder emits review signals.',
+        source: 'rule_derived' as const,
+        basis: ['test name mentions review signals', 'assertions inspect result payload'],
+      },
+    },
+    diff_hunks: [
+      {
+        hunk_id: 'test_hunk_1',
+        old_start: 20,
+        old_lines: 2,
+        new_start: 20,
+        new_lines: 4,
+        hunk_fingerprint: 'sha256:test-hunk',
+        lines: [
+          { type: 'context' as const, content: 'result = build_test_management_summary(change_set)' },
+          { type: 'add' as const, content: assertion },
+        ],
+      },
+    ],
+    full_body: [
+      { type: 'context' as const, content: `def ${name}():` },
+      { type: 'add' as const, content: `    ${assertion}` },
+    ],
+    assertions: [
+      { type: 'add' as const, content: assertion },
+    ],
+    covered_scenarios: [
+      {
+        title: `Scenario named by test: ${name.replaceAll('_', ' ')}.`,
+        source: 'rule_derived' as const,
+        basis: ['test_name'],
+      },
+    ],
+    test_results: [
+      {
+        run_id: `run_${testCaseId}`,
+        source: 'rerun' as const,
+        command: 'uv run pytest backend/tests/test_builder.py',
+        status: 'passed' as const,
+        exit_code: 0,
+        duration_ms: 321,
+        stdout: `${name} PASSED`,
+        stderr: '',
+        executed_cases: [
+          {
+            node_id: `backend/tests/test_builder.py::${name}`,
+            name,
+            status: 'passed' as const,
+            source: 'collect_only' as const,
+            scenarios: [],
+            test_data: [],
+          },
+        ],
+        analysis: {
+          summary: `${name} result summary`,
+          scenarios: [],
+          test_data: [],
+          coverage_gaps: [],
+          source: 'rule_derived' as const,
+          basis: ['runner_output'],
+        },
+        captured_at: '2026-04-26T00:00:00Z',
+        evidence_grade: 'direct' as const,
+      },
+    ],
+    covered_changes: [
+      {
+        path: 'backend/app/schemas/assessment.py',
+        symbol: 'TestCaseSummary',
+        hunk_id: 'hunk_review_signal_schema',
+        relationship: 'names_changed_symbol' as const,
+        evidence_grade: 'direct' as const,
+        basis: ['assertion validates result payload'],
+      },
+    ],
+    recommended_commands: [
+      {
+        command_id: 'cmd_builder',
+        command: 'uv run pytest backend/tests/test_builder.py',
+        reason: 'Run the changed builder test.',
+        scope: 'test_case' as const,
+        status: 'not_run' as const,
+        last_run_id: null,
+      },
+    ],
+    related_agent_claims: [],
+    unknowns: [],
+  }
+}
+
 describe('TestChangesPage', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     window.localStorage.setItem('assessment.language', 'en-US')
   })
+  afterEach(() => cleanup())
 
-  it('renders only changed test files in the test module', async () => {
+  it('renders test cases with result, covered changed code, and commands', async () => {
     render(<TestChangesPage />)
 
-    expect(await screen.findByText('Test Files')).toBeInTheDocument()
-    expect(screen.getAllByText('backend/tests/test_main.py').length).toBeGreaterThan(0)
-    expect(screen.queryByText('backend/app/main.py')).not.toBeInTheDocument()
-    await waitFor(() => expect(screen.getByText(/assert response.status_code/)).toBeInTheDocument())
+    expect(await screen.findByText('Test Cases')).toBeInTheDocument()
+    expect(screen.getAllByText('test_builder_emits_review_signals').length).toBeGreaterThan(0)
+    await waitFor(() => expect(screen.getByText('Test Result')).toBeInTheDocument())
+    expect(screen.getByText('1 test case was associated with this run.')).toBeInTheDocument()
+    const resultPanel = screen.getByRole('main', { name: 'test-result' })
+    const resultHeadings = within(resultPanel).getAllByRole('heading').map(heading => heading.textContent)
+    expect(resultHeadings.indexOf('Rule Analysis')).toBeLessThan(resultHeadings.indexOf('Executed Cases'))
+    expect(screen.getByText('backend/app/schemas/assessment.py')).toBeInTheDocument()
+    expect(screen.getByText('uv run pytest backend/tests/test_builder.py')).toBeInTheDocument()
+
+    expect(fetchLatestAssessment).toHaveBeenCalledWith('divide_prd_to_ui', '')
+    expect(fetchAssessmentTests).toHaveBeenCalledWith('divide_prd_to_ui', 'aca_ws_1', '')
+    expect(fetchAssessmentTestCaseDetail).toHaveBeenCalledWith(
+      'divide_prd_to_ui',
+      'aca_ws_1',
+      'tc_review_signals',
+      '',
+    )
+  })
+
+  it('lazy-loads test result agent analysis from the selected stored run and closes the progress modal', async () => {
+    render(<TestChangesPage />)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Agent Analyze' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Agent Analyze' }))
+
+    await waitFor(() => {
+      expect(analyzeAssessmentTestResult).toHaveBeenCalledWith(
+        'divide_prd_to_ui',
+        'aca_ws_1',
+        'tc_review_signals',
+        'run_builder',
+        '',
+      )
+    })
+    expect(screen.queryByRole('dialog', { name: 'Agent test result analysis' })).not.toBeInTheDocument()
+  })
+
+  it('switches the test management page copy to Chinese', async () => {
+    render(<TestChangesPage />)
+
+    fireEvent.click(await screen.findByRole('button', { name: '简体中文' }))
+
+    expect(screen.getByRole('heading', { name: 'AI 编写的测试用例' })).toBeInTheDocument()
+    expect(screen.getByText('测试管理')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '测试用例' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('heading', { name: '测试结果' })).toBeInTheDocument())
+    expect(screen.getByRole('heading', { name: '测试意图' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Agent 分析' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '重新运行' })).toBeInTheDocument()
+    expect(window.localStorage.getItem('assessment.language')).toBe('zh-CN')
+  })
+
+  it('does not render stale detail after switching test cases', async () => {
+    let resolveFirstDetail: (value: ReturnType<typeof testCaseDetailFixture>) => void = () => {}
+    const firstDetail = testCaseDetailFixture(
+      'tc_review_signals',
+      'test_builder_emits_review_signals',
+      'assert first_result',
+    )
+    const secondDetail = testCaseDetailFixture(
+      'tc_command_paths',
+      'test_builder_emits_command_paths',
+      'assert second_result',
+    )
+    const firstDetailRequest = new Promise<ReturnType<typeof testCaseDetailFixture>>(resolve => {
+      resolveFirstDetail = resolve
+    })
+
+    vi.mocked(fetchAssessmentTestCaseDetail)
+      .mockImplementationOnce(async () => firstDetailRequest)
+      .mockImplementationOnce(async () => secondDetail)
+
+    render(<TestChangesPage />)
+
+    expect(await screen.findByText('Test Cases')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /test_builder_emits_command_paths/ }))
+
+    await waitFor(() => expect(screen.getByText('test_builder_emits_command_paths result summary')).toBeInTheDocument())
+    resolveFirstDetail(firstDetail)
+
+    await waitFor(() => expect(fetchAssessmentTestCaseDetail).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.queryByText('test_builder_emits_review_signals result summary')).not.toBeInTheDocument())
+    expect(screen.getByText('test_builder_emits_command_paths result summary')).toBeInTheDocument()
   })
 })

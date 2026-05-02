@@ -37,7 +37,7 @@ Settings are loaded in `backend/app/config/settings.py` via `ObservabilitySettin
 
 ## Architecture
 
-This is a FastAPI backend that analyzes a code repository's current working tree and produces an "AI Application Overview" — a synthesized snapshot of the app's structure, pending changes, and verification status.
+This is a FastAPI backend for `whether_commit`: it analyzes a code repository's current working tree and produces a commit-readiness snapshot of the app's structure, pending changes, verification status, and known blockers before commit.
 
 ### Request Flow
 

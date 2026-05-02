@@ -23,7 +23,12 @@ class WorkspaceSnapshotService:
         if not self.is_git_workspace(workspace_path):
             raise RuntimeError(f"WORKSPACE_NOT_A_GIT_REPO: {workspace_path}")
 
-        status_lines = self._git_status_lines(workspace_path, include_untracked=include_untracked)
+        base_commit_sha = self.resolve_base_commit(workspace_path, base_commit_sha)
+        status_lines = self._change_status_lines(
+            workspace_path,
+            base_commit_sha=base_commit_sha,
+            include_untracked=include_untracked,
+        )
         changed_files = self._parse_changed_files(status_lines)
         has_pending_changes = bool(changed_files)
         fingerprint = self._build_fingerprint(
@@ -44,6 +49,25 @@ class WorkspaceSnapshotService:
             status_lines=status_lines,
             fingerprint=fingerprint,
         )
+
+    def resolve_base_commit(self, workspace_path: str, base_commit_sha: str) -> str:
+        if base_commit_sha != "AUTO_MERGE_BASE":
+            return base_commit_sha
+        for candidate in ("main", "origin/main", "master", "origin/master", "dev", "origin/dev"):
+            try:
+                result = subprocess.run(
+                    ["git", "merge-base", "HEAD", candidate],
+                    cwd=workspace_path,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                continue
+            value = result.stdout.strip()
+            if value:
+                return value
+        return "HEAD"
 
     def is_git_workspace(self, workspace_path: str) -> bool:
         if not os.path.isdir(workspace_path):
@@ -73,6 +97,43 @@ class WorkspaceSnapshotService:
             check=True,
         )
         return [line.rstrip("\n") for line in result.stdout.splitlines() if line.rstrip("\n")]
+
+    def _git_name_status_lines(self, workspace_path: str, base_commit_sha: str) -> List[str]:
+        result = subprocess.run(
+            ["git", "diff", "--name-status", base_commit_sha, "HEAD"],
+            cwd=workspace_path,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return [line.rstrip("\n") for line in result.stdout.splitlines() if line.rstrip("\n")]
+
+    def _change_status_lines(self, workspace_path: str, base_commit_sha: str, include_untracked: bool) -> List[str]:
+        if base_commit_sha == "HEAD":
+            return self._git_status_lines(workspace_path, include_untracked=include_untracked)
+
+        status_lines = [self._name_status_to_porcelain(line) for line in self._git_name_status_lines(workspace_path, base_commit_sha)]
+        existing_paths = set(self._parse_changed_files(status_lines))
+        for line in self._git_status_lines(workspace_path, include_untracked=include_untracked):
+            changed_files = self._parse_changed_files([line])
+            if changed_files and changed_files[0] not in existing_paths:
+                status_lines.append(line)
+        return [line for line in status_lines if line.strip()]
+
+    def _name_status_to_porcelain(self, line: str) -> str:
+        parts = line.split("\t")
+        status = parts[0]
+        path = parts[-1] if parts else ""
+        marker = status[:1]
+        if marker == "M":
+            return f" M {path}"
+        if marker == "A":
+            return f" A {path}"
+        if marker == "D":
+            return f" D {path}"
+        if marker == "R":
+            return f" R {path}"
+        return f" M {path}"
 
     def _parse_changed_files(self, status_lines: List[str]) -> List[str]:
         changed_files: List[str] = []

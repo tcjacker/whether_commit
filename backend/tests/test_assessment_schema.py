@@ -1,7 +1,13 @@
 from app.schemas.assessment import (
     AgentChangeRecord,
     AssessmentManifest,
+    CoveredChange,
+    CoveredChangePreview,
     ChangedFileDetail,
+    RecommendedTestCommand,
+    TestCaseDetail,
+    TestCaseSummary,
+    TestIntentSummary,
 )
 
 
@@ -177,3 +183,87 @@ def test_agent_record_requires_fidelity_metadata():
     )
 
     assert record.confidence.files_touched == "high"
+
+
+def test_test_case_summary_requires_extraction_confidence_and_intent_source():
+    summary = TestCaseSummary.model_validate(
+        {
+            "test_case_id": "tc_backend_tests_test_builder_py_test_emits_review_signals",
+            "file_id": "cf_tests_builder",
+            "path": "backend/tests/test_builder.py",
+            "name": "test_emits_review_signals",
+            "status": "added",
+            "extraction_confidence": "certain",
+            "evidence_grade": "direct",
+            "weakest_evidence_grade": "indirect",
+            "last_status": "not_run",
+            "covered_changes_preview": [
+                {
+                    "path": "backend/app/schemas/assessment.py",
+                    "hunk_id": "hunk_001",
+                    "risk_level": "medium",
+                    "evidence_grade": "direct",
+                }
+            ],
+            "highest_risk_covered_hunk_id": "hunk_001",
+            "intent_summary": {
+                "text": "verifies review signal fields",
+                "source": "rule_derived",
+                "basis": ["assertions"],
+            },
+        }
+    )
+
+    assert summary.extraction_confidence == "certain"
+    assert summary.intent_summary.source == "rule_derived"
+    assert summary.covered_changes_preview[0].hunk_id == "hunk_001"
+
+
+def test_test_case_detail_keeps_relationship_separate_from_evidence_grade():
+    detail = TestCaseDetail.model_validate(
+        {
+            "test_case": {
+                "test_case_id": "tc_1",
+                "file_id": "cf_1",
+                "path": "backend/tests/test_builder.py",
+                "name": "test_builder_links_graph_fact",
+                "status": "modified",
+                "extraction_confidence": "heuristic",
+                "evidence_grade": "inferred",
+                "weakest_evidence_grade": "inferred",
+                "last_status": "unknown",
+                "covered_changes_preview": [],
+                "highest_risk_covered_hunk_id": None,
+                "intent_summary": {"text": "", "source": "unknown", "basis": []},
+            },
+            "diff_hunks": [],
+            "full_body": [],
+            "assertions": [],
+            "covered_changes": [
+                {
+                    "path": "backend/app/services/agentic_change_assessment/builder.py",
+                    "symbol": "AgenticChangeAssessmentBuilder",
+                    "hunk_id": "hunk_002",
+                    "relationship": "graph_inferred",
+                    "evidence_grade": "inferred",
+                    "basis": ["review_graph_edge"],
+                }
+            ],
+            "recommended_commands": [
+                {
+                    "command_id": "cmd_tc_1_pytest",
+                    "command": "uv run pytest backend/tests/test_builder.py",
+                    "reason": "Run the changed test file.",
+                    "scope": "test_file",
+                    "status": "not_run",
+                    "last_run_id": None,
+                }
+            ],
+            "related_agent_claims": [],
+            "unknowns": [],
+        }
+    )
+
+    assert detail.covered_changes[0].relationship == "graph_inferred"
+    assert detail.covered_changes[0].evidence_grade == "inferred"
+    assert detail.recommended_commands[0].status == "not_run"

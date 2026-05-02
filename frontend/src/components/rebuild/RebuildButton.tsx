@@ -1,5 +1,5 @@
-import styles from './RebuildButton.module.css'
 import { t, type Language } from '../../i18n'
+import styles from './RebuildButton.module.css'
 
 interface Props {
   isRebuilding: boolean

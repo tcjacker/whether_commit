@@ -3,7 +3,9 @@ export function isTestFile(path: string): boolean {
   const basename = normalized.split('/').pop() ?? normalized
 
   return (
-    normalized.includes('/tests/')
+    normalized.startsWith('tests/')
+    || normalized.includes('/tests/')
+    || normalized.startsWith('__tests__/')
     || normalized.includes('/__tests__/')
     || basename.startsWith('test_')
     || basename.endsWith('_test.py')

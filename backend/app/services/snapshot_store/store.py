@@ -159,6 +159,32 @@ class SnapshotStore:
         )
         return self._read_json_file(path)
 
+    def get_test_management_summary(
+        self,
+        repo_key: str,
+        snapshot_id: str,
+        workspace_path: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        path = os.path.join(
+            self._locate_assessment_dir(repo_key, snapshot_id, workspace_path=workspace_path),
+            "test_management.json",
+        )
+        return self._read_json_file(path)
+
+    def get_test_case_detail(
+        self,
+        repo_key: str,
+        snapshot_id: str,
+        test_case_id: str,
+        workspace_path: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        path = os.path.join(
+            self._locate_assessment_dir(repo_key, snapshot_id, workspace_path=workspace_path),
+            "test_cases",
+            f"{test_case_id}.json",
+        )
+        return self._read_json_file(path)
+
     def get_latest_assessment_manifest(
         self,
         repo_key: str,
@@ -225,6 +251,49 @@ class SnapshotStore:
             self._assessment_dir(repo_key, snapshot_id, workspace_path=workspace_path),
             "changed_files",
             f"{file_id}.json",
+        )
+        self._atomic_write(path, data)
+
+    def save_test_management_summary(
+        self,
+        repo_key: str,
+        snapshot_id: str,
+        data: Dict[str, Any],
+        workspace_path: Optional[str] = None,
+    ) -> None:
+        path = os.path.join(
+            self._assessment_dir(repo_key, snapshot_id, workspace_path=workspace_path),
+            "test_management.json",
+        )
+        self._atomic_write(path, data)
+
+    def save_test_case_detail(
+        self,
+        repo_key: str,
+        snapshot_id: str,
+        test_case_id: str,
+        data: Dict[str, Any],
+        workspace_path: Optional[str] = None,
+    ) -> None:
+        path = os.path.join(
+            self._assessment_dir(repo_key, snapshot_id, workspace_path=workspace_path),
+            "test_cases",
+            f"{test_case_id}.json",
+        )
+        self._atomic_write(path, data)
+
+    def save_test_command_run_result(
+        self,
+        repo_key: str,
+        snapshot_id: str,
+        run_id: str,
+        data: Dict[str, Any],
+        workspace_path: Optional[str] = None,
+    ) -> None:
+        path = os.path.join(
+            self._assessment_dir(repo_key, snapshot_id, workspace_path=workspace_path),
+            "test_command_runs",
+            f"{run_id}.json",
         )
         self._atomic_write(path, data)
 

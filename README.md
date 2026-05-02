@@ -1,6 +1,6 @@
-# backend-visiable
+# whether_commit
 
-`backend-visiable` is a local-first code review intelligence tool. It analyzes a repository working tree, maps changed files and symbols to tests and review context, and presents an assessment UI for understanding what changed and what still needs verification.
+`whether_commit` is a local-first pre-commit assessment tool that helps decide whether a repository's current changes are ready to commit. It analyzes the working tree, maps changed files and symbols to tests and review context, and presents an assessment UI for understanding what changed, what still needs verification, and whether there are known blockers before committing.
 
 The project has two main parts:
 

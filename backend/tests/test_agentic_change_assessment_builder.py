@@ -1,6 +1,264 @@
 from app.services.agentic_change_assessment.builder import AgenticChangeAssessmentBuilder
 
 
+def test_builder_returns_test_management_payload_for_changed_tests():
+    builder = AgenticChangeAssessmentBuilder()
+    change_data = {
+        "changed_files": ["backend/tests/test_builder.py"],
+        "changed_symbols": ["test_builder_emits_review_signals"],
+        "file_diff_stats": {
+            "backend/tests/test_builder.py": {
+                "added_lines": 2,
+                "deleted_lines": 0,
+                "change_type": "modified file",
+            }
+        },
+        "file_diffs": {
+            "backend/tests/test_builder.py": (
+                "@@ -1,0 +1,2 @@\n"
+                "+def test_builder_emits_review_signals():\n"
+                "+    assert True\n"
+            )
+        },
+    }
+
+    result = builder.build(
+        repo_key="demo",
+        workspace_snapshot_id="ws_tests",
+        change_data=change_data,
+        verification_data={"affected_tests": [], "missing_tests_for_changed_paths": [], "evidence_by_path": {}},
+        review_graph_data={"nodes": [], "edges": []},
+        agent_records=[],
+    )
+
+    test_management = result["test_management"]
+
+    assert test_management["summary"]["test_case_count"] == 1
+    assert test_management["summary"]["files"][0]["path"] == "backend/tests/test_builder.py"
+    assert test_management["summary"]["files"][0]["test_cases"][0]["name"] == "test_builder_emits_review_signals"
+
+
+def test_builder_passes_agent_instruction_contract_to_test_management(tmp_path):
+    (tmp_path / "CLAUDE.md").write_text(
+        "Write tests with test_* names under tests/ when changing behavior.",
+        encoding="utf-8",
+    )
+    builder = AgenticChangeAssessmentBuilder()
+    change_data = {
+        "workspace_path": str(tmp_path),
+        "changed_files": ["backend/tests/test_builder.py"],
+        "changed_symbols": ["test_builder_emits_review_signals"],
+        "file_diff_stats": {
+            "backend/tests/test_builder.py": {
+                "added_lines": 2,
+                "deleted_lines": 0,
+                "change_type": "modified file",
+            }
+        },
+        "file_diffs": {
+            "backend/tests/test_builder.py": (
+                "@@ -1,0 +1,2 @@\n"
+                "+def test_builder_emits_review_signals():\n"
+                "+    assert True\n"
+            )
+        },
+    }
+
+    result = builder.build(
+        repo_key="demo",
+        workspace_snapshot_id="ws_tests",
+        change_data=change_data,
+        verification_data={"affected_tests": [], "missing_tests_for_changed_paths": [], "evidence_by_path": {}},
+        review_graph_data={"nodes": [], "edges": []},
+        agent_records=[],
+    )
+
+    unknowns = result["test_management"]["summary"]["unknowns"]
+    assert any("Agent instruction gap:" in unknown for unknown in unknowns)
+    assert any(".agent-test-results" in unknown for unknown in unknowns)
+
+
+def test_builder_feeds_test_management_evidence_back_to_changed_file_review_data():
+    builder = AgenticChangeAssessmentBuilder()
+    change_data = {
+        "changed_files": ["backend/app/schemas/assessment.py", "backend/tests/test_builder.py"],
+        "changed_symbols": ["AgentClaim"],
+        "file_diff_stats": {
+            "backend/app/schemas/assessment.py": {
+                "added_lines": 1,
+                "deleted_lines": 0,
+                "change_type": "modified file",
+            },
+            "backend/tests/test_builder.py": {
+                "added_lines": 2,
+                "deleted_lines": 0,
+                "change_type": "modified file",
+            },
+        },
+        "file_diffs": {
+            "backend/app/schemas/assessment.py": (
+                "@@ -1,1 +1,2 @@\n"
+                " class AgentClaim:\n"
+                "+    source: str\n"
+                "@@ -10,1 +11,2 @@\n"
+                " class AgentClaim:\n"
+                "+    message_ref: str\n"
+            ),
+            "backend/tests/test_builder.py": (
+                "@@ -0,0 +1,2 @@\n"
+                "+def test_builder_links_agent_claim():\n"
+                "+    assert AgentClaim(source=\"codex\").source == \"codex\"\n"
+            ),
+        },
+    }
+
+    result = builder.build(
+        repo_key="demo",
+        workspace_snapshot_id="ws_test_feedback",
+        change_data=change_data,
+        verification_data={"affected_tests": [], "missing_tests_for_changed_paths": [], "evidence_by_path": {}},
+        review_graph_data={"nodes": [], "edges": []},
+        agent_records=[],
+    )
+
+    changed_file = next(
+        item for item in result["manifest"]["file_list"] if item["path"] == "backend/app/schemas/assessment.py"
+    )
+    changed_detail = result["file_details"][changed_file["file_id"]]
+    related_test = changed_detail["related_tests"][0]
+
+    assert related_test["path"] == "backend/tests/test_builder.py"
+    assert related_test["evidence_grade"] == "inferred"
+    assert "test_management" in related_test["basis"]
+    assert changed_file["weakest_test_evidence_grade"] == "inferred"
+    assert len(changed_detail["related_tests"]) == 1
+    assert [item["hunk_id"] for item in changed_detail["hunk_review_items"]] == ["hunk_001", "hunk_002"]
+    assert all(item["fact_basis"][-1] == "test_workbench:inferred" for item in changed_detail["hunk_review_items"])
+    assert all("Test workbench links" in item["reasons"][-1] for item in changed_detail["hunk_review_items"])
+
+
+def test_builder_test_path_detection_includes_root_and_nested_tests_directories():
+    builder = AgenticChangeAssessmentBuilder()
+
+    assert builder._is_test_path("__tests__/client.js")
+    assert builder._is_test_path("frontend/src/pages/__tests__/client.js")
+    assert builder._is_test_path("frontend/src/api/client.spec.ts")
+    assert builder._is_test_path("frontend/src/api/client.test.js")
+
+
+def test_builder_returns_test_management_payload_for_root_level_javascript_tests():
+    builder = AgenticChangeAssessmentBuilder()
+    change_data = {
+        "changed_files": ["__tests__/client.js"],
+        "changed_symbols": ["renders client"],
+        "file_diff_stats": {
+            "__tests__/client.js": {
+                "added_lines": 3,
+                "deleted_lines": 0,
+                "change_type": "modified file",
+            }
+        },
+        "file_diffs": {
+            "__tests__/client.js": (
+                "@@ -1,0 +1,3 @@\n"
+                "+it(\"renders client\", () => {\n"
+                "+  expect(client.render()).toBeTruthy()\n"
+                "+})\n"
+            )
+        },
+    }
+
+    result = builder.build(
+        repo_key="demo",
+        workspace_snapshot_id="ws_root_js_tests",
+        change_data=change_data,
+        verification_data={"affected_tests": [], "missing_tests_for_changed_paths": [], "evidence_by_path": {}},
+        review_graph_data={"nodes": [], "edges": []},
+        agent_records=[],
+    )
+
+    summary = result["test_management"]["summary"]
+
+    assert summary["test_case_count"] == 1
+    assert summary["files"][0]["path"] == "__tests__/client.js"
+
+
+def test_builder_returns_test_management_payload_for_root_level_tests_directory():
+    builder = AgenticChangeAssessmentBuilder()
+    change_data = {
+        "changed_files": ["tests/client.js"],
+        "changed_symbols": ["renders client"],
+        "file_diff_stats": {
+            "tests/client.js": {
+                "added_lines": 3,
+                "deleted_lines": 0,
+                "change_type": "modified file",
+            }
+        },
+        "file_diffs": {
+            "tests/client.js": (
+                "@@ -1,0 +1,3 @@\n"
+                "+it(\"renders client\", () => {\n"
+                "+  expect(client.render()).toBeTruthy()\n"
+                "+})\n"
+            )
+        },
+    }
+
+    result = builder.build(
+        repo_key="demo",
+        workspace_snapshot_id="ws_root_tests",
+        change_data=change_data,
+        verification_data={"affected_tests": [], "missing_tests_for_changed_paths": [], "evidence_by_path": {}},
+        review_graph_data={"nodes": [], "edges": []},
+        agent_records=[],
+    )
+
+    summary = result["test_management"]["summary"]
+
+    assert summary["changed_test_file_count"] == 1
+    assert summary["test_case_count"] == 1
+    assert summary["files"][0]["path"] == "tests/client.js"
+
+
+def test_builder_returns_test_management_payload_for_spec_named_javascript_tests():
+    builder = AgenticChangeAssessmentBuilder()
+    change_data = {
+        "changed_files": ["frontend/src/api/client.spec.ts"],
+        "changed_symbols": ["renders client"],
+        "file_diff_stats": {
+            "frontend/src/api/client.spec.ts": {
+                "added_lines": 3,
+                "deleted_lines": 0,
+                "change_type": "modified file",
+            }
+        },
+        "file_diffs": {
+            "frontend/src/api/client.spec.ts": (
+                "@@ -1,0 +1,3 @@\n"
+                "+it(\"renders client\", () => {\n"
+                "+  expect(client.render()).toBeTruthy()\n"
+                "+})\n"
+            )
+        },
+    }
+
+    result = builder.build(
+        repo_key="demo",
+        workspace_snapshot_id="ws_spec_tests",
+        change_data=change_data,
+        verification_data={"affected_tests": [], "missing_tests_for_changed_paths": [], "evidence_by_path": {}},
+        review_graph_data={"nodes": [], "edges": []},
+        agent_records=[],
+    )
+
+    summary = result["test_management"]["summary"]
+
+    assert summary["changed_test_file_count"] == 1
+    assert summary["test_case_count"] == 1
+    assert summary["files"][0]["path"] == "frontend/src/api/client.spec.ts"
+
+
 def test_builder_creates_manifest_and_lazy_file_detail():
     builder = AgenticChangeAssessmentBuilder()
     agent_record = {

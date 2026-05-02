@@ -1,7 +1,7 @@
-# 研发版 PRD：AI Application Overview（轻量版）
+# 研发版 PRD：whether_commit（轻量版）
 
 ## 1. 文档目的
-本文件用于指导工程团队按模块拆解并实现 **AI Application Overview** 的 MVP。  
+本文件用于指导工程团队按模块拆解并实现 **whether_commit** 的 MVP：协助判断当前代码变更是否应该提交。
 该版本为 **轻量级落地版 PRD**，重点是：
 
 - 不引入数据库

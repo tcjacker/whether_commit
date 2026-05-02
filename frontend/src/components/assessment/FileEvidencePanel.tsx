@@ -1,4 +1,5 @@
 import type { ChangedFileDetail } from '../../types/api'
+import { formatValue, t, type Language } from '../../i18n'
 import styles from './FileEvidencePanel.module.css'
 
 function EvidenceText({ text }: { text: string }) {
@@ -11,17 +12,13 @@ function EvidenceText({ text }: { text: string }) {
   )
 }
 
-function formatValue(value: string) {
-  return value.replaceAll('_', ' ')
-}
-
-function assessmentLabel(detail: ChangedFileDetail) {
+function assessmentLabel(detail: ChangedFileDetail, language: Language) {
   if (detail.file_assessment.generated_by === 'codex_agent' && detail.file_assessment.agent_status === 'accepted') {
-    return 'Agent assessment · Codex'
+    return t(language, 'agentAssessmentAccepted')
   }
-  if (detail.file_assessment.agent_status === 'failed') return 'Rule-based fallback'
-  if (detail.file_assessment.agent_status === 'fallback') return 'Rule-based fallback'
-  return 'Rule-based fallback'
+  if (detail.file_assessment.agent_status === 'failed') return t(language, 'ruleFallback')
+  if (detail.file_assessment.agent_status === 'fallback') return t(language, 'ruleFallback')
+  return t(language, 'ruleFallback')
 }
 
 function dedupeHunkFactChecks(hunkItems: NonNullable<ChangedFileDetail['hunk_review_items']>) {
@@ -70,12 +67,14 @@ export function FileEvidencePanel({
   detail,
   onRunAgent,
   running = false,
+  language = 'en-US',
 }: {
   detail: ChangedFileDetail | null
   onRunAgent?: () => void
   running?: boolean
+  language?: Language
 }) {
-  if (!detail) return <aside className={styles.panel}>No file selected.</aside>
+  if (!detail) return <aside className={styles.panel}>{t(language, 'noFileSelected')}</aside>
   const sources = detail.related_agent_records
     .map(record => `${record.source} (${record.capture_level})`)
     .join(', ') || detail.file.agent_sources.join(', ') || 'unknown'
@@ -94,8 +93,8 @@ export function FileEvidencePanel({
     <aside className={styles.panel} aria-label="file-evidence">
       <div className={styles.signalPanel}>
         <div>
-          <strong>v0.2 Review Signals</strong>
-          <span>Claim/fact checks for this hunk before commit.</span>
+          <strong>{t(language, 'reviewSignals')}</strong>
+          <span>{t(language, 'reviewSignalsDescription')}</span>
         </div>
         <dl>
           <div>
@@ -103,44 +102,44 @@ export function FileEvidencePanel({
             <dd>{claims[0]?.type ?? 'none'}</dd>
           </div>
           <div>
-            <dt>Mismatch</dt>
+            <dt>{t(language, 'mismatch')}</dt>
             <dd>{mismatches.length}</dd>
           </div>
           <div>
-            <dt>Evidence</dt>
+            <dt>{t(language, 'evidence')}</dt>
             <dd>{weakestGrade}</dd>
           </div>
           <div>
-            <dt>Hunk</dt>
+            <dt>{t(language, 'hunk')}</dt>
             <dd>{hunkItems[0] ? `P${hunkItems[0].priority}` : 'none'}</dd>
           </div>
           <div>
-            <dt>Provenance</dt>
+            <dt>{t(language, 'provenance')}</dt>
             <dd>{provenanceRefs[0]?.confidence ?? 'none'}</dd>
           </div>
         </dl>
       </div>
       <div className={detail.file_assessment.generated_by === 'codex_agent' ? styles.agentBadge : styles.fallbackBadge}>
-        <strong>{isRunning ? 'Agent assessment running · Codex' : assessmentLabel(detail)}</strong>
-        <span>confidence: {detail.file_assessment.confidence}</span>
+        <strong>{isRunning ? t(language, 'agentAssessmentRunning') : assessmentLabel(detail, language)}</strong>
+        <span>{t(language, 'confidence')}: {detail.file_assessment.confidence}</span>
         {isRunning && <span className={styles.spinner} aria-label="agent-running" />}
         {canRunAgent && onRunAgent && (
-          <button className={styles.runButton} onClick={onRunAgent}>Run Codex Assessment</button>
+          <button className={styles.runButton} onClick={onRunAgent}>{t(language, 'runCodexAssessment')}</button>
         )}
       </div>
       <section>
-        <h2>Verdict</h2>
-        <p>Risk: {detail.file.risk_level}</p>
-        <p>Coverage: {detail.file.coverage_status}</p>
-        <p>Evidence grade: {weakestGrade}</p>
+        <h2>{t(language, 'verdict')}</h2>
+        <p>{t(language, 'risk')}: {detail.file.risk_level}</p>
+        <p>{t(language, 'coverage')}: {detail.file.coverage_status}</p>
+        <p>{t(language, 'evidenceGrade')}: {weakestGrade}</p>
         <EvidenceText text={detail.file_assessment.recommended_action} />
       </section>
       <section>
-        <h2>Agent Claims</h2>
+        <h2>{t(language, 'agentClaims')}</h2>
         <EvidenceText text={detail.file_assessment.why_changed} />
-        <p className={styles.meta}>Sources: {sources}</p>
+        <p className={styles.meta}>{t(language, 'sources')}: {sources}</p>
         {detail.file_assessment.evidence_refs.length > 0 && (
-          <p className={styles.meta}>Evidence: {detail.file_assessment.evidence_refs.join(', ')}</p>
+          <p className={styles.meta}>{t(language, 'evidence')}: {detail.file_assessment.evidence_refs.join(', ')}</p>
         )}
         {claims.length > 0 && (
           <ul className={styles.evidenceList}>
@@ -154,14 +153,14 @@ export function FileEvidencePanel({
         )}
       </section>
       <section>
-        <h2>Fact Checks</h2>
+        <h2>{t(language, 'factChecks')}</h2>
         <EvidenceText text={detail.file_assessment.impact_summary} />
-        <p className={styles.meta}>Symbols: {detail.changed_symbols.length}</p>
+        <p className={styles.meta}>{t(language, 'symbols')}: {detail.changed_symbols.length}</p>
         {factChecks.length > 0 && (
           <ul className={styles.evidenceList}>
             {factChecks.map(item => (
               <li key={`${item.priority}-${item.reasons.join('|')}`}>
-                <span>Priority {item.priority}</span>
+                <span>{t(language, 'priority')} {item.priority}</span>
                 <small>
                   {item.reasons.join(' · ')}
                   {item.count > 1 ? ` · ${item.count} hunks` : ''}
@@ -172,24 +171,24 @@ export function FileEvidencePanel({
         )}
       </section>
       <section>
-        <h2>Mismatches</h2>
+        <h2>{t(language, 'mismatches')}</h2>
         {mismatches.length === 0 ? (
-          <p>No claim/fact mismatch was detected.</p>
+          <p>{t(language, 'noClaimFactMismatch')}</p>
         ) : (
           <ul className={styles.evidenceList}>
             {mismatches.map(mismatch => (
               <li key={mismatch.mismatch_id}>
                 <span>{mismatch.kind}</span>
-                <small>{formatValue(mismatch.severity)} · {mismatch.explanation}</small>
+                <small>{formatValue(mismatch.severity, language)} · {mismatch.explanation}</small>
               </li>
             ))}
           </ul>
         )}
       </section>
       <section>
-        <h2>Test Evidence</h2>
+        <h2>{t(language, 'testEvidence')}</h2>
         <EvidenceText text={detail.file_assessment.test_summary} />
-        <p className={styles.meta}>Related tests: {detail.related_tests.length}</p>
+        <p className={styles.meta}>{t(language, 'relatedTests')}: {detail.related_tests.length}</p>
         {testPreview.length > 0 && (
           <ul className={styles.evidenceList}>
             {testPreview.map(test => (
@@ -201,16 +200,16 @@ export function FileEvidencePanel({
           </ul>
         )}
         {detail.file_assessment.unknowns.length > 0 && (
-          <p className={styles.meta}>Unknowns: {detail.file_assessment.unknowns.join(', ')}</p>
+          <p className={styles.meta}>{t(language, 'unknowns')}: {detail.file_assessment.unknowns.join(', ')}</p>
         )}
       </section>
       <section>
-        <h2>Provenance</h2>
+        <h2>{t(language, 'provenance')}</h2>
         {agentProvenanceRefs.length === 0 ? (
           <>
-            <p>No agent-specific provenance was linked to this file.</p>
+            <p>{t(language, 'noAgentProvenance')}</p>
             {provenanceRefs.length > 0 && (
-              <p className={styles.meta}>Only git diff evidence is available; review this file without relying on agent message/tool attribution.</p>
+              <p className={styles.meta}>{t(language, 'onlyGitDiffEvidence')}</p>
             )}
           </>
         ) : (

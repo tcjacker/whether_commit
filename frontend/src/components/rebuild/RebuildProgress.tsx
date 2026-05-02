@@ -14,7 +14,7 @@ const STEP_LABELS: Record<Language, Record<string, string>> = {
   },
   'en-US': {
     init: 'Initializing...',
-    capture_working_tree: 'Capturing workspace state...',
+    capture_working_tree: 'Capturing working tree...',
     build_graph_snapshot: 'Parsing code graph...',
     analyze_pending_change: 'Analyzing diff...',
     aggregate_verification: 'Aggregating verification...',

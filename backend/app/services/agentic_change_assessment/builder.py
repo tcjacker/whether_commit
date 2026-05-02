@@ -6,11 +6,18 @@ from app.schemas.assessment import AssessmentManifest, ChangedFileDetail, Review
 from app.services.agentic_change_assessment.diff_parser import parse_unified_diff_hunks
 from app.services.agentic_change_assessment.file_assessment_agent import FileAssessmentAgent
 from app.services.agentic_change_assessment.id_utils import file_id_for_path, fingerprint_for_text
+from app.services.test_management.agent_contract import AgentInstructionContractReader
+from app.services.test_management.extractor import TestManagementExtractor, is_test_path
 
 
 class AgenticChangeAssessmentBuilder:
-    def __init__(self, file_assessment_agent: FileAssessmentAgent | None = None) -> None:
+    def __init__(
+        self,
+        file_assessment_agent: FileAssessmentAgent | None = None,
+        test_management_extractor: TestManagementExtractor | None = None,
+    ) -> None:
         self.file_assessment_agent = file_assessment_agent or FileAssessmentAgent()
+        self.test_management_extractor = test_management_extractor or TestManagementExtractor()
 
     def build(
         self,
@@ -198,11 +205,133 @@ class AgenticChangeAssessmentBuilder:
         }
         AssessmentManifest.model_validate(manifest)
         review_state = ReviewState.model_validate({"scope": "assessment", "file_reviews": review_items}).model_dump()
+        test_file_details = {
+            file_id: detail for file_id, detail in file_details.items() if self._is_test_path(detail["file"]["path"])
+        }
+        changed_non_test_file_details = {
+            file_id: detail for file_id, detail in file_details.items() if not self._is_test_path(detail["file"]["path"])
+        }
+        agent_instruction_contract = {}
+        workspace_path = change_data.get("workspace_path")
+        if isinstance(workspace_path, str) and workspace_path.strip():
+            agent_instruction_contract = AgentInstructionContractReader(workspace_path).read()
+        test_management = self.test_management_extractor.build(
+            assessment_id=manifest["assessment_id"],
+            repo_key=repo_key,
+            file_details=test_file_details,
+            changed_file_details=changed_non_test_file_details,
+            review_graph_data=review_graph_data,
+            command_evidence=codex_conversation_evidence.get("commands", []),
+            agent_instruction_contract=agent_instruction_contract,
+        )
+        self._apply_test_management_feedback(
+            test_management=test_management,
+            file_details=file_details,
+            file_list=file_list,
+        )
+        AssessmentManifest.model_validate(manifest)
         return {
             "manifest": manifest,
             "file_details": file_details,
             "review_state": review_state,
+            "test_management": test_management,
         }
+
+    def _is_test_path(self, path: str) -> bool:
+        return is_test_path(path)
+
+    def _apply_test_management_feedback(
+        self,
+        *,
+        test_management: Dict[str, Any],
+        file_details: Dict[str, Dict[str, Any]],
+        file_list: List[Dict[str, Any]],
+    ) -> None:
+        file_summaries_by_path = {item["path"]: item for item in file_list}
+        seen_tests_by_path = {
+            detail["file"]["path"]: {test.get("test_id") for test in detail.get("related_tests", [])}
+            for detail in file_details.values()
+        }
+
+        for case_detail in test_management.get("test_case_details", {}).values():
+            test_case = case_detail.get("test_case", {})
+            test_id = str(test_case.get("test_case_id") or "")
+            test_path = str(test_case.get("path") or "")
+            if not test_id or not test_path:
+                continue
+
+            for covered_change in case_detail.get("covered_changes", []):
+                changed_path = str(covered_change.get("path") or "")
+                changed_detail = next(
+                    (
+                        detail
+                        for detail in file_details.values()
+                        if detail["file"]["path"] == changed_path and not self._is_test_path(changed_path)
+                    ),
+                    None,
+                )
+                if changed_detail is None:
+                    continue
+
+                evidence_grade = str(covered_change.get("evidence_grade") or "unknown")
+                if test_id not in seen_tests_by_path.setdefault(changed_path, set()):
+                    changed_detail.setdefault("related_tests", []).append(
+                        {
+                            "test_id": test_id,
+                            "path": test_path,
+                            "relationship": self._review_relationship_for_evidence(evidence_grade),
+                            "confidence": self._confidence_for_evidence(evidence_grade),
+                            "last_status": test_case.get("last_status", "unknown"),
+                            "evidence": "graph_inference",
+                            "evidence_grade": evidence_grade,
+                            "basis": [
+                                "test_management",
+                                f"test_case:{test_case.get('name', '')}",
+                                f"relationship:{covered_change.get('relationship', 'unknown')}",
+                                *covered_change.get("basis", []),
+                            ],
+                        }
+                    )
+                    seen_tests_by_path[changed_path].add(test_id)
+
+                weakest_grade = self._weakest_evidence_grade(changed_detail.get("related_tests", []))
+                changed_detail["file"]["weakest_test_evidence_grade"] = weakest_grade
+                if changed_path in file_summaries_by_path:
+                    file_summaries_by_path[changed_path]["weakest_test_evidence_grade"] = weakest_grade
+                self._annotate_hunk_with_test_feedback(changed_detail, covered_change, test_case)
+                ChangedFileDetail.model_validate(changed_detail)
+
+    def _review_relationship_for_evidence(self, evidence_grade: str) -> str:
+        if evidence_grade == "direct":
+            return "primary"
+        if evidence_grade in {"indirect", "inferred"}:
+            return "secondary"
+        return "inferred"
+
+    def _confidence_for_evidence(self, evidence_grade: str) -> str:
+        if evidence_grade == "direct":
+            return "high"
+        if evidence_grade in {"indirect", "inferred"}:
+            return "medium"
+        return "low"
+
+    def _annotate_hunk_with_test_feedback(
+        self, detail: Dict[str, Any], covered_change: Dict[str, Any], test_case: Dict[str, Any]
+    ) -> None:
+        hunk_id = str(covered_change.get("hunk_id") or "")
+        evidence_grade = str(covered_change.get("evidence_grade") or "unknown")
+        if not hunk_id:
+            return
+        for item in detail.get("hunk_review_items", []):
+            if item.get("hunk_id") != hunk_id:
+                continue
+            reason = f"Test workbench links {test_case.get('name', 'test case')} with {evidence_grade} evidence."
+            fact = f"test_workbench:{evidence_grade}"
+            if reason not in item.setdefault("reasons", []):
+                item["reasons"].append(reason)
+            if fact not in item.setdefault("fact_basis", []):
+                item["fact_basis"].append(fact)
+            return
 
     def _status_from_change_type(self, change_type: str) -> str:
         if "new" in change_type:

@@ -1,21 +1,24 @@
 import type { ChangedFileSummary } from '../../types/api'
+import { t, type Language } from '../../i18n'
 import styles from './ChangedFileList.module.css'
 
 export function ChangedFileList({
   files,
   selectedFileId,
   onSelect,
-  title = 'Changed Files',
+  title,
+  language = 'en-US',
 }: {
   files: ChangedFileSummary[]
   selectedFileId: string | null
   onSelect: (file: ChangedFileSummary) => void
   title?: string
+  language?: Language
 }) {
   return (
     <aside className={styles.panel} aria-label="changed-files">
       <header className={styles.header}>
-        <h2>{title}</h2>
+        <h2>{title ?? t(language, 'changedFiles')}</h2>
         <span>{files.length}</span>
       </header>
       <ul className={styles.list}>
@@ -29,8 +32,8 @@ export function ChangedFileList({
               <span className={styles.meta}>{file.status} +{file.additions} -{file.deletions}</span>
               {(file.highest_hunk_priority || file.mismatch_count || file.weakest_test_evidence_grade) && (
                 <span className={styles.badges}>
-                  {file.highest_hunk_priority ? <span>Priority {file.highest_hunk_priority}</span> : null}
-                  {file.mismatch_count ? <span>{file.mismatch_count} mismatch</span> : null}
+                  {file.highest_hunk_priority ? <span>{t(language, 'priority')} {file.highest_hunk_priority}</span> : null}
+                  {file.mismatch_count ? <span>{file.mismatch_count} {t(language, 'mismatch')}</span> : null}
                   {file.weakest_test_evidence_grade ? <span>{file.weakest_test_evidence_grade}</span> : null}
                 </span>
               )}

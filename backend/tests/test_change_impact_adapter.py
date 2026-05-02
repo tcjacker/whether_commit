@@ -173,6 +173,38 @@ class ChangeImpactAdapterTest(unittest.TestCase):
         self.assertTrue(any("return {'ok': True, 'tests': 3}" in snippet for snippet in stats["snippets"]))
         self.assertIn("@@ -1,3 +1,4 @@", result["file_diffs"]["app/main.py"])
 
+    def test_generate_change_analysis_uses_commit_range_entries_when_base_is_not_head(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            os.mkdir(os.path.join(tmp_dir, ".git"))
+            adapter = ChangeImpactAdapter(workspace_path=tmp_dir, base_commit_sha="main")
+            adapter._git_name_status_lines = lambda: ["M\tbackend/tests/test_builder.py"]
+            adapter._git_status_lines = lambda: []
+            adapter._load_graph_snapshot = lambda: {"modules": [], "dependencies": []}
+            adapter._last_commit_timestamp = lambda: 100
+            adapter._collect_codex_conversation_evidence = lambda _timestamp: {}
+            adapter._git_diff_for_file = lambda _file_path, staged=False: ""
+            adapter._extract_changed_python_facts = lambda file_path, status: {
+                "symbols": ["test_builder_emits_review_signals"],
+                "functions": ["test_builder_emits_review_signals"],
+                "classes": [],
+                "routes": [],
+                "changed_schemas": [],
+                "changed_jobs": [],
+                "affected_data_objects": [],
+            }
+            adapter._git_range_diff_for_file = lambda file_path: (
+                "@@ -0,0 +1,2 @@\n"
+                "+def test_builder_emits_review_signals():\n"
+                "+    assert True\n"
+            )
+
+            result = adapter.generate_change_analysis("ws_range")
+
+        self.assertEqual(result["base_commit_sha"], "main")
+        self.assertEqual(result["changed_files"], ["backend/tests/test_builder.py"])
+        self.assertEqual(result["linked_tests"], ["backend/tests/test_builder.py"])
+        self.assertIn("test_builder_emits_review_signals", result["changed_symbols"])
+
     def test_generate_change_analysis_includes_codex_conversation_evidence(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             os.mkdir(os.path.join(tmp_dir, ".git"))

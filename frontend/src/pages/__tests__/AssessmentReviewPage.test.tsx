@@ -1,6 +1,10 @@
-import { render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AssessmentReviewPage } from '../AssessmentReviewPage'
+
+const assessmentApi = vi.hoisted(() => ({
+  triggerFileAgentAssessment: vi.fn(),
+}))
 
 vi.mock('../../api/assessments', () => ({
   fetchLatestAssessment: vi.fn(async () => ({
@@ -200,21 +204,69 @@ vi.mock('../../api/assessments', () => ({
       notes: [],
     },
   })),
+  triggerFileAgentAssessment: assessmentApi.triggerFileAgentAssessment,
 }))
 
 describe('AssessmentReviewPage', () => {
   beforeEach(() => {
-    window.localStorage.setItem('assessment.language', 'en-US')
+    window.localStorage.clear()
+    assessmentApi.triggerFileAgentAssessment.mockReset()
+    assessmentApi.triggerFileAgentAssessment.mockResolvedValue({
+      file: {
+        file_id: 'cf_abc123',
+        path: 'backend/app/main.py',
+        old_path: null,
+        status: 'modified',
+        additions: 2,
+        deletions: 1,
+        risk_level: 'low',
+        coverage_status: 'unknown',
+        review_status: 'unreviewed',
+        agent_sources: ['git_diff'],
+        diff_fingerprint: 'sha256:abc',
+        highest_hunk_priority: 92,
+        mismatch_count: 1,
+        weakest_test_evidence_grade: 'claimed',
+      },
+      diff_hunks: [],
+      changed_symbols: [],
+      related_agent_records: [],
+      related_tests: [],
+      impact_facts: [],
+      file_assessment: {
+        why_changed: 'English reason.',
+        impact_summary: 'English impact.',
+        test_summary: 'English tests.',
+        recommended_action: 'English action.',
+        generated_by: 'codex_agent',
+        agent_status: 'accepted',
+        agent_source: 'codex',
+        confidence: 'medium',
+        evidence_refs: ['git_diff'],
+        unknowns: [],
+      },
+      review_state: {
+        review_status: 'unreviewed',
+        diff_fingerprint: 'sha256:abc',
+        reviewer: null,
+        reviewed_at: null,
+        notes: [],
+      },
+    })
+  })
+
+  afterEach(() => {
+    cleanup()
   })
 
   it('renders summary, file list, diff, and evidence sections', async () => {
     render(<AssessmentReviewPage />)
 
     expect(await screen.findByText('本次变更包含 1 个待审查文件。')).toBeInTheDocument()
-    expect(screen.getByText('Code Change Overview')).toBeInTheDocument()
-    expect(screen.getByText('Codex Chat and Operation Records')).toBeInTheDocument()
-    expect(screen.getByText('Test Execution')).toBeInTheDocument()
-    expect(screen.getByText('Agent Overall Assessment')).toBeInTheDocument()
+    expect(screen.getByText('代码变更总览')).toBeInTheDocument()
+    expect(screen.getByText('Codex 聊天和操作记录')).toBeInTheDocument()
+    expect(screen.getByText('测试执行情况')).toBeInTheDocument()
+    expect(screen.getByText('Agent 总体评估')).toBeInTheDocument()
     expect(screen.getAllByText('backend/app/main.py').length).toBeGreaterThan(0)
     const changedFilesPanel = screen.getByLabelText('changed-files')
     expect(changedFilesPanel.textContent?.indexOf('backend/app/main.py')).toBeLessThan(
@@ -222,21 +274,51 @@ describe('AssessmentReviewPage', () => {
     )
     expect(screen.queryByText('backend/tests/test_main.py')).not.toBeInTheDocument()
     await waitFor(() => expect(screen.getByText(/new line/)).toBeInTheDocument())
-    expect(screen.getByText('Rule-based fallback')).toBeInTheDocument()
-    expect(screen.getByText('Verdict')).toBeInTheDocument()
-    expect(screen.getByText('Agent Claims')).toBeInTheDocument()
-    expect(screen.getByText('Mismatches')).toBeInTheDocument()
-    expect(screen.getByText('Test Evidence')).toBeInTheDocument()
-    expect(screen.getAllByText('Provenance').length).toBeGreaterThan(0)
+    expect(screen.getByText('规则兜底')).toBeInTheDocument()
+    expect(screen.getByText('结论')).toBeInTheDocument()
+    expect(screen.getByText('Agent 声明')).toBeInTheDocument()
+    expect(screen.getByText('不一致项')).toBeInTheDocument()
+    expect(screen.getByText('测试证据')).toBeInTheDocument()
+    expect(screen.getAllByText('溯源').length).toBeGreaterThan(0)
     expect(screen.getByText('working tree')).toBeInTheDocument()
-    expect(screen.getByText('needs tests · 1 mismatch · 1 unreviewed')).toBeInTheDocument()
-    expect(screen.getByText(/Do not commit yet: strengthen test evidence before committing./)).toBeInTheDocument()
-    expect(screen.getByText(/Review backend\/app\/main.py hunk_001 \(P92\) first: public API changed/)).toBeInTheDocument()
-    expect(screen.getByText('0 missing, 1 weak evidence, coverage unknown')).toBeInTheDocument()
-    expect(screen.getByText('capture partial, provenance partial, confidence medium')).toBeInTheDocument()
-    expect(screen.getAllByText('Priority 92').length).toBeGreaterThan(0)
+    expect(screen.getByText('needs tests · 1 个不一致 · 1 个未审')).toBeInTheDocument()
+    expect(screen.getByText(/暂不建议提交：需要补强测试证据后再提交。/)).toBeInTheDocument()
+    expect(screen.getByText(/优先看 backend\/app\/main.py hunk_001 \(P92\)：public API changed/)).toBeInTheDocument()
+    expect(screen.getByText('0 个缺失，1 个弱证据，覆盖 unknown')).toBeInTheDocument()
+    expect(screen.getByText('捕获 partial，溯源 partial，置信度 medium')).toBeInTheDocument()
+    expect(screen.getAllByText('优先级 92').length).toBeGreaterThan(0)
     expect(screen.getByText('claimed_tested_but_no_executed_test_evidence')).toBeInTheDocument()
-    expect(screen.getByText('Evidence grade: claimed')).toBeInTheDocument()
+    expect(screen.getByText('证据等级: claimed')).toBeInTheDocument()
     expect(screen.getByText(/sess_123/)).toBeInTheDocument()
+  })
+
+  it('switches the assessment UI to English', async () => {
+    render(<AssessmentReviewPage />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'English' }))
+
+    expect(screen.getByText('Code Change Overview')).toBeInTheDocument()
+    expect(screen.getByText('Codex Chat and Operation Records')).toBeInTheDocument()
+    expect(screen.getByText('Test Execution')).toBeInTheDocument()
+    expect(screen.getByText('Agent Overall Assessment')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Changed Files' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Run Codex Assessment' })).toBeInTheDocument()
+    expect(window.localStorage.getItem('assessment.language')).toBe('en-US')
+  })
+
+  it('uses the selected language when running Codex assessment', async () => {
+    render(<AssessmentReviewPage />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'English' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Run Codex Assessment' }))
+
+    await waitFor(() => expect(assessmentApi.triggerFileAgentAssessment).toHaveBeenCalled())
+    expect(assessmentApi.triggerFileAgentAssessment).toHaveBeenCalledWith(
+      'divide_prd_to_ui',
+      'aca_ws_1',
+      'cf_abc123',
+      '',
+      'en-US',
+    )
   })
 })

@@ -289,6 +289,7 @@ describe('PrecommitReviewPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start rebuild' }))
 
     await waitFor(() => expect(assessmentApi.triggerAssessmentRebuild).toHaveBeenCalledWith({
+      base_commit_sha: 'AUTO_MERGE_BASE',
       repo_key: 'divide_prd_to_ui',
       workspace_path: undefined,
     }))
