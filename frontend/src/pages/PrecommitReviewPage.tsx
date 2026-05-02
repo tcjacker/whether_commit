@@ -112,9 +112,10 @@ export function PrecommitReviewPage() {
             <div className={styles.banner}>workspace changed outside target</div>
           )}
 
-          <div className={styles.list} aria-label="review queue">
+          <h2 className={styles.sectionTitle}>Unresolved Review Queue</h2>
+          <div className={styles.list} aria-label="unresolved review queue">
             {snapshot.queue.length === 0
-              ? <div className={styles.item}>No open review queue items.</div>
+              ? <div className={styles.item}>No unresolved review items.</div>
               : snapshot.queue.map(item => (
                 <div className={styles.item} key={item.queue_id}>
                   <strong>P{item.priority}</strong>
@@ -206,6 +207,9 @@ function HunkList({ hunks, onReviewed }: { hunks: PrecommitHunk[], onReviewed: (
     <div className={styles.list}>
       {hunks.map(hunk => (
         <div className={styles.hunk} key={hunk.hunk_id}>
+          <div className={styles.hunkHeader}>
+            <span>Hunk status: {hunk.review_status}</span>
+          </div>
           {hunk.lines.map((line, index) => (
             <div className={`${styles.line} ${styles[line.type] ?? ''}`} key={`${hunk.hunk_id}-${index}`}>
               <span>{linePrefix(line.type)}</span>

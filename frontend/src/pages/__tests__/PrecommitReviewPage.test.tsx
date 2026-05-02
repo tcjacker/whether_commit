@@ -14,6 +14,7 @@ const snapshot = {
     path: 'backend/schema.py',
     additions: 1,
     deletions: 1,
+    review_state_summary: 'unreviewed',
     risk: { score: 50, band: 'high', reasons: [{ reason_id: 'schema', label: 'Schema changed', weight: 30 }] },
   }],
   hunks: [{
@@ -26,6 +27,7 @@ const snapshot = {
     new_start: 1,
     new_lines: 1,
     hunk_fingerprint: 'sha256:hunk',
+    review_status: 'open',
     lines: [
       { type: 'header', content: '@@ -1 +1 @@' },
       { type: 'remove', content: 'value = 1' },
@@ -59,6 +61,8 @@ const reviewedSnapshot = {
   decision: 'no_known_blockers',
   workspace_changed_outside_target: false,
   summary: { ...snapshot.summary, review_state: 'reviewed' },
+  files: [{ ...snapshot.files[0], review_state_summary: 'reviewed' }],
+  hunks: [{ ...snapshot.hunks[0], review_status: 'reviewed' }],
   signals: [{ ...snapshot.signals[0], status: 'reviewed' }],
   queue: [],
 }
@@ -83,15 +87,18 @@ describe('PrecommitReviewPage', () => {
     render(<PrecommitReviewPage />)
 
     expect(await screen.findByText('needs review')).toBeInTheDocument()
+    expect(screen.getByText('Unresolved Review Queue')).toBeInTheDocument()
     expect(screen.getByText('workspace changed outside target')).toBeInTheDocument()
     expect(screen.getAllByText('backend/schema.py').length).toBeGreaterThan(0)
     expect(screen.getAllByText('backend/schema.py has a high-risk staged hunk that needs review.').length).toBeGreaterThan(0)
+    expect(screen.getByText('Hunk status: open')).toBeInTheDocument()
     expect(screen.getByText('value = 2')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Mark hunk reviewed' }))
 
     await waitFor(() => expect(api.updateHunkReviewState).toHaveBeenCalledWith('', 'hunk_1', 'reviewed'))
     expect(await screen.findByText('no known blockers')).toBeInTheDocument()
+    expect(screen.getByText('Hunk status: reviewed')).toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('verification command'), { target: { value: 'pytest' } })
     fireEvent.click(screen.getByRole('button', { name: 'Run verification' }))
