@@ -44,3 +44,7 @@ export function runVerificationCommand(
 ): Promise<VerificationRun> {
   return post<VerificationRun>('/api/verification/run', { workspace_path: workspacePath, snapshot_id: snapshotId, command })
 }
+
+export function fetchVerificationRun(workspacePath: string, runId: string): Promise<VerificationRun> {
+  return get<VerificationRun>(`/api/verification/runs/${runId}?${params(workspacePath)}`)
+}

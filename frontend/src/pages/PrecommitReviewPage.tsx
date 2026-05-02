@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  fetchVerificationRun,
   fetchCurrentSnapshot,
   rebuildPrecommitReview,
   runVerificationCommand,
@@ -35,6 +36,7 @@ export function PrecommitReviewPage() {
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null)
   const [command, setCommand] = useState('')
   const [verificationRun, setVerificationRun] = useState<VerificationRun | null>(null)
+  const [evidenceRun, setEvidenceRun] = useState<VerificationRun | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -86,6 +88,12 @@ export function PrecommitReviewPage() {
         return fetchCurrentSnapshot(workspacePath)
       })
       .then(setSnapshotAndSelection)
+      .catch(err => setError(String(err)))
+  }
+
+  const handleViewEvidence = (runId: string) => {
+    fetchVerificationRun(workspacePath, runId)
+      .then(setEvidenceRun)
       .catch(err => setError(String(err)))
   }
 
@@ -145,6 +153,15 @@ export function PrecommitReviewPage() {
                 <strong>{signal.severity}</strong>
                 <div>{signal.message}</div>
                 <div className={styles.meta}>{signal.status} · {signal.policy_rule_id}</div>
+                {signal.evidence_ids.length > 0 && (
+                  <div className={styles.evidenceActions}>
+                    {signal.evidence_ids.map(evidenceId => (
+                      <button className={styles.button} key={evidenceId} onClick={() => handleViewEvidence(evidenceId)}>
+                        View evidence {evidenceId}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {signal.status === 'open' && (
                   <button className={styles.button} onClick={() => handleAcceptSignal(signal.signal_id)}>
                     Accept risk
@@ -167,6 +184,14 @@ export function PrecommitReviewPage() {
           {verificationRun && (
             <div className={styles.item}>
               {verificationRun.status} · exit {verificationRun.exit_code ?? 'unknown'} · {verificationRun.target_aligned ? 'aligned' : 'misaligned'}
+            </div>
+          )}
+          {evidenceRun && (
+            <div className={styles.item}>
+              <strong>Evidence {evidenceRun.run_id}</strong>
+              <div>{evidenceRun.status} · exit {evidenceRun.exit_code ?? 'unknown'} · {evidenceRun.target_aligned ? 'aligned' : 'misaligned'}</div>
+              {evidenceRun.execution_mode && <div>{evidenceRun.execution_mode}</div>}
+              {evidenceRun.raw_output_ref && <div>{evidenceRun.raw_output_ref}</div>}
             </div>
           )}
         </section>

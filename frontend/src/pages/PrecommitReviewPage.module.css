@@ -136,6 +136,13 @@
   margin-top: 12px;
 }
 
+.evidenceActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .input {
   flex: 1;
   min-width: 0;
