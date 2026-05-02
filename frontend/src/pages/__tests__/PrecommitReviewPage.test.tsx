@@ -96,7 +96,11 @@ describe('PrecommitReviewPage', () => {
   it('renders review console state and handles hunk review and verification run', async () => {
     render(<PrecommitReviewPage />)
 
-    expect(await screen.findByText('needs review')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getAllByText('needs review').length).toBeGreaterThan(0))
+    expect(screen.getByLabelText('changed-files')).toBeInTheDocument()
+    expect(screen.getByLabelText('file-diff')).toBeInTheDocument()
+    expect(screen.getByLabelText('file-evidence')).toBeInTheDocument()
+    expect(screen.getByText('Staged Files')).toBeInTheDocument()
     expect(screen.getByText('Unresolved Review Queue')).toBeInTheDocument()
     expect(screen.getByText('workspace changed outside target')).toBeInTheDocument()
     expect(screen.getAllByText('backend/schema.py').length).toBeGreaterThan(0)
@@ -118,7 +122,7 @@ describe('PrecommitReviewPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Mark hunk reviewed' }))
 
     await waitFor(() => expect(api.updateHunkReviewState).toHaveBeenCalledWith('', 'hunk_1', 'reviewed'))
-    expect(await screen.findByText('no known blockers')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getAllByText('no known blockers').length).toBeGreaterThan(0))
     expect(screen.getByText('Hunk status: reviewed')).toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('verification command'), { target: { value: 'pytest' } })
